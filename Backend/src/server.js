@@ -27,6 +27,9 @@ const start = async () => {
     // appointment routes
     const appointmentRoutes = require('./routes/appointmentRoutes');
     app.use('/api/appointments', appointmentRoutes);
+    // users routes
+    const usersRoutes = require('./routes/users');
+    app.use('/api/users', usersRoutes);
     app.get('/', (req, res) => res.json({ status: 'ok', message: 'Smart Healthcare API' }));
     app.use(require('./middleware/errorHandler'));
 
