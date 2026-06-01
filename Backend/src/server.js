@@ -21,6 +21,12 @@ const start = async () => {
   try {
     await connectDB();
     app.use('/api', routes);
+    // patient routes
+    const patientRoutes = require('./routes/patientRoutes');
+    app.use('/api/patient', patientRoutes);
+    // appointment routes
+    const appointmentRoutes = require('./routes/appointmentRoutes');
+    app.use('/api/appointments', appointmentRoutes);
     app.get('/', (req, res) => res.json({ status: 'ok', message: 'Smart Healthcare API' }));
     app.use(require('./middleware/errorHandler'));
 
