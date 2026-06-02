@@ -213,7 +213,7 @@ export default function AdminDashboardPage() {
                     <td className="py-6 text-slate-400" colSpan={5}>No users found.</td>
                   </tr>
                 ) : users.map((user) => (
-                  <tr key={user._id || user.id} className="border-b border-slate-800/80">
+                  <tr key={user._id || user.id} className="border-b border-slate-800/80 hover:bg-slate-800/20 transition">
                     <td className="py-3 pr-4 text-slate-100">{user.name}</td>
                     <td className="py-3 pr-4 text-slate-300">{user.email}</td>
                     <td className="py-3 pr-4 text-slate-300 capitalize">{user.role}</td>
@@ -338,11 +338,13 @@ export default function AdminDashboardPage() {
                     <td className="py-6 text-slate-400" colSpan={4}>No appointments found.</td>
                   </tr>
                 ) : appointments.map((appointment) => (
-                  <tr key={appointment._id} className="border-b border-slate-800/80">
+                  <tr key={appointment._id} className="border-b border-slate-800/80 hover:bg-slate-800/20 transition">
                     <td className="py-3 pr-4 text-slate-100">{appointment.patient?.name || '—'}</td>
-                    <td className="py-3 pr-4 text-slate-300">{appointment.doctor?.name || '—'}</td>
-                    <td className="py-3 pr-4 text-slate-300">{formatDate(appointment.appointmentDate)}</td>
-                    <td className="py-3 pr-4 capitalize text-slate-300">{appointment.status}</td>
+                    <td className="py-3 pr-4 text-slate-300">Dr. {appointment.doctor?.name || '—'}</td>
+                    <td className="py-3 pr-4 text-slate-400 text-xs">{formatDate(appointment.appointmentDate)}</td>
+                    <td className="py-3 pr-4">
+                      <AppointmentStatusBadge status={appointment.status} />
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -359,6 +361,22 @@ export default function AdminDashboardPage() {
         </section>
       </div>
     </DashboardPage>
+  );
+}
+
+const apptStatusConfig = {
+  pending:   { label: 'Pending',   cls: 'bg-amber-500/10 text-amber-400 border-amber-500/20' },
+  confirmed: { label: 'Confirmed', cls: 'bg-blue-500/10 text-blue-400 border-blue-500/20' },
+  completed: { label: 'Completed', cls: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' },
+  cancelled: { label: 'Cancelled', cls: 'bg-red-500/10 text-red-400 border-red-500/20' },
+};
+
+function AppointmentStatusBadge({ status }) {
+  const cfg = apptStatusConfig[status] || { label: status, cls: 'bg-slate-800 text-slate-400 border-slate-700' };
+  return (
+    <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium ${cfg.cls}`}>
+      {cfg.label}
+    </span>
   );
 }
 
