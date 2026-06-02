@@ -1,0 +1,38 @@
+# Dependency directories
+node_modules/
+
+# Environment files
+.env
+.env.*.local
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+logs/
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editors
+.vscode/
+.idea/
+
+# Build outputs
+build/
+dist/
+coverage/
+.cache/
+
+# Frontend build
+Frontend/build/
+
+# Backend
+Backend/node_modules/
+
+# Misc
+*.tgz
+*.sqlite
+*.sqlite3

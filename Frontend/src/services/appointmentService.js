@@ -10,4 +10,9 @@ export const createAppointment = async (payload) => {
   return res.data;
 };
 
-export default { getAppointments, createAppointment };
+export const updateAppointmentStatus = async (id, status) => {
+  const res = await api.put(`/appointments/${id}/status`, { status });
+  return res.data;
+};
+
+export default { getAppointments, createAppointment, updateAppointmentStatus };
