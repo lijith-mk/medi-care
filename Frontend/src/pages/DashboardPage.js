@@ -15,6 +15,7 @@ const roleMeta = {
 function AvatarMenu({ user, updateUser }) {
   const [open, setOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState('');
   const fileRef = useRef(null);
 
   const initials = user?.name
@@ -25,12 +26,15 @@ function AvatarMenu({ user, updateUser }) {
     const file = e.target.files?.[0];
     if (!file) return;
     setUploading(true);
+    setError('');
     setOpen(false);
     try {
       const res = await uploadAvatar(file);
       updateUser({ avatarUrl: res.data.avatarUrl });
     } catch (err) {
-      console.error('Avatar upload failed', err);
+      const msg = err?.response?.data?.message || err?.message || 'Upload failed';
+      setError(msg);
+      setTimeout(() => setError(''), 4000);
     } finally {
       setUploading(false);
       e.target.value = '';
@@ -39,31 +43,41 @@ function AvatarMenu({ user, updateUser }) {
 
   const handleRemove = async () => {
     setOpen(false);
+    setError('');
     try {
       await deleteAvatar();
       updateUser({ avatarUrl: null });
     } catch (err) {
-      console.error('Avatar remove failed', err);
+      const msg = err?.response?.data?.message || 'Remove failed';
+      setError(msg);
+      setTimeout(() => setError(''), 4000);
     }
   };
 
   return (
     <div className="relative">
+      {/* Error toast */}
+      {error && (
+        <div className="absolute right-0 top-11 z-50 w-56 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-600 shadow-lg">
+          {error}
+        </div>
+      )}
+
       <button
         onClick={() => setOpen((s) => !s)}
-        className="relative flex h-8 w-8 items-center justify-center rounded-full border-2 border-green-200 bg-green-50 overflow-hidden text-xs font-bold text-green-700 hover:border-green-400 transition focus:outline-none"
-        title="Profile photo"
+        className="relative flex h-9 w-9 items-center justify-center rounded-full border-2 border-green-300 bg-green-50 overflow-hidden text-xs font-bold text-green-700 hover:border-green-500 transition focus:outline-none focus:ring-2 focus:ring-green-300"
+        title="Change profile photo"
       >
         {uploading ? (
-          <span className="h-3.5 w-3.5 rounded-full border-2 border-green-600 border-t-transparent animate-spin" />
+          <span className="h-4 w-4 rounded-full border-2 border-green-600 border-t-transparent animate-spin" />
         ) : user?.avatarUrl ? (
           <img src={user.avatarUrl} alt={user.name} className="h-full w-full object-cover" />
         ) : (
-          initials
+          <span className="select-none">{initials}</span>
         )}
         {/* camera badge */}
         {!uploading && (
-          <span className="absolute bottom-0 right-0 flex h-3 w-3 items-center justify-center rounded-full bg-green-600 border border-white">
+          <span className="absolute bottom-0 right-0 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-green-600 border-2 border-white">
             <svg className="w-2 h-2 text-white" fill="currentColor" viewBox="0 0 20 20">
               <path fillRule="evenodd" d="M4 5a2 2 0 00-2 2v8a2 2 0 002 2h12a2 2 0 002-2V7a2 2 0 00-2-2h-1.586a1 1 0 01-.707-.293l-1.121-1.121A2 2 0 0011.172 3H8.828a2 2 0 00-1.414.586L6.293 4.707A1 1 0 015.586 5H4zm6 9a3 3 0 100-6 3 3 0 000 6z" clipRule="evenodd" />
             </svg>
@@ -74,7 +88,7 @@ function AvatarMenu({ user, updateUser }) {
       {open && (
         <>
           <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 top-10 z-40 w-44 rounded-xl border border-gray-100 bg-white shadow-lg py-1 text-sm">
+          <div className="absolute right-0 top-11 z-40 w-48 rounded-xl border border-gray-100 bg-white shadow-lg py-1">
             <button
               onClick={() => { setOpen(false); fileRef.current?.click(); }}
               className="flex w-full items-center gap-2.5 px-4 py-2.5 text-xs text-gray-700 hover:bg-gray-50 transition"
@@ -82,7 +96,7 @@ function AvatarMenu({ user, updateUser }) {
               <svg className="w-4 h-4 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
               </svg>
-              Upload photo
+              {user?.avatarUrl ? 'Change photo' : 'Upload photo'}
             </button>
             {user?.avatarUrl && (
               <button

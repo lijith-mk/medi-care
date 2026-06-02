@@ -37,6 +37,13 @@ export const AuthProvider = ({ children }) => {
     return response.data;
   };
 
+  const googleAuth = async (credential) => {
+    const response = await api.post('/auth/google', { credential });
+    localStorage.setItem('token', response.data.token);
+    setUser(response.data.data.user);
+    return response.data;
+  };
+
   const logout = () => {
     localStorage.removeItem('token');
     setUser(null);
@@ -45,7 +52,7 @@ export const AuthProvider = ({ children }) => {
   // Allow components to patch the in-memory user (e.g. after avatar upload)
   const updateUser = (patch) => setUser((prev) => prev ? { ...prev, ...patch } : prev);
 
-  const value = useMemo(() => ({ user, loading, login, register, logout, updateUser }), [user, loading]);
+  const value = useMemo(() => ({ user, loading, login, register, googleAuth, logout, updateUser }), [user, loading]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };

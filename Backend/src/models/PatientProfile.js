@@ -10,9 +10,23 @@ const medicalDocumentSchema = new mongoose.Schema({
 
 const patientProfileSchema = new mongoose.Schema({
   user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, unique: true },
-  medicalHistory: { type: String },
+  // Medical
+  medicalHistory: { type: String, default: '' },
   allergies: [{ type: String }],
   chronicDiseases: [{ type: String }],
+  currentMedications: [{ type: String }],
+  bloodGroup: { type: String, enum: ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-', ''], default: '' },
+  // Physical
+  height: { type: Number },   // cm
+  weight: { type: Number },   // kg
+  // Personal
+  address: { type: String, default: '' },
+  // Emergency
+  emergencyContact: {
+    name:  { type: String, default: '' },
+    phone: { type: String, default: '' },
+  },
+  // Documents
   documents: [medicalDocumentSchema],
 }, { timestamps: true });
 

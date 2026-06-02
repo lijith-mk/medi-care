@@ -36,6 +36,9 @@ const start = async () => {
     // upload routes (avatar + medical documents)
     const uploadRoutes = require('./routes/uploadRoutes');
     app.use('/api/upload', uploadRoutes);
+    // extended profile routes (doctor, lab, receptionist)
+    const profileRoutes = require('./routes/profileRoutes');
+    app.use('/api/profile', profileRoutes);
     app.get('/', (req, res) => res.json({ status: 'ok', message: 'Smart Healthcare API' }));
     app.use(require('./middleware/errorHandler'));
 

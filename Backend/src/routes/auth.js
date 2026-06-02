@@ -15,6 +15,8 @@ router.post('/login', [
   body('password').exists().withMessage('Password is required'),
 ], authController.login);
 
+router.post('/google', authController.googleAuth);
+
 router.get('/me', auth, authController.me);
 
 module.exports = router;
