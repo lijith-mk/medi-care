@@ -9,6 +9,7 @@ const userSchema = new mongoose.Schema({
   isActive: { type: Boolean, default: true },
   age: { type: Number },
   gender: { type: String },
+  avatarUrl: { type: String, default: null },
 }, { timestamps: true });
 
 module.exports = mongoose.model('User', userSchema);

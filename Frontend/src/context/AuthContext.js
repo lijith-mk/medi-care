@@ -42,7 +42,10 @@ export const AuthProvider = ({ children }) => {
     setUser(null);
   };
 
-  const value = useMemo(() => ({ user, loading, login, register, logout }), [user, loading]);
+  // Allow components to patch the in-memory user (e.g. after avatar upload)
+  const updateUser = (patch) => setUser((prev) => prev ? { ...prev, ...patch } : prev);
+
+  const value = useMemo(() => ({ user, loading, login, register, logout, updateUser }), [user, loading]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };

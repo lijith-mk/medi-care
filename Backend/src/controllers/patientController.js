@@ -28,7 +28,7 @@ exports.createOrUpdateProfile = async (req, res, next) => {
 exports.getProfile = async (req, res, next) => {
   try {
     const userId = req.user.id;
-    const profile = await PatientProfile.findOne({ user: userId }).populate('user', 'name email role');
+    const profile = await PatientProfile.findOne({ user: userId }).populate('user', 'name email role avatarUrl');
     if (!profile) {
       return res.json({
         success: true,
@@ -38,6 +38,7 @@ exports.getProfile = async (req, res, next) => {
             medicalHistory: '',
             allergies: [],
             chronicDiseases: [],
+            documents: [],
             user: { _id: userId },
           },
         },
