@@ -30,6 +30,9 @@ const start = async () => {
     // users routes
     const usersRoutes = require('./routes/users');
     app.use('/api/users', usersRoutes);
+    // admin routes
+    const adminRoutes = require('./routes/admin');
+    app.use('/api/admin', adminRoutes);
     app.get('/', (req, res) => res.json({ status: 'ok', message: 'Smart Healthcare API' }));
     app.use(require('./middleware/errorHandler'));
 

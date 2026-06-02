@@ -27,6 +27,7 @@ coverage/
 .cache/
 
 # Frontend build
+Frontend/node_modules/
 Frontend/build/
 
 # Backend
