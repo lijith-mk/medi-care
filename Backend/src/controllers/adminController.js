@@ -1,5 +1,35 @@
 const User = require('../models/User');
 const Appointment = require('../models/Appointment');
+const bcrypt = require('bcryptjs');
+
+exports.createUser = async (req, res, next) => {
+  try {
+    const { name, email, password, role, phone, age, gender } = req.body;
+
+    const allowedRoles = ['patient', 'doctor', 'receptionist', 'lab', 'admin'];
+    if (!name || !email || !password || !role) {
+      return res.status(400).json({ success: false, message: 'name, email, password, and role are required' });
+    }
+    if (!allowedRoles.includes(role)) {
+      return res.status(400).json({ success: false, message: `Role must be one of: ${allowedRoles.join(', ')}` });
+    }
+
+    const existing = await User.findOne({ email: email.toLowerCase() });
+    if (existing) return res.status(409).json({ success: false, message: 'Email already in use' });
+
+    const hashed = await bcrypt.hash(password, 10);
+    const user = await User.create({ name, email, password: hashed, role, phone, age, gender });
+
+    res.status(201).json({
+      success: true,
+      message: 'User created successfully',
+      data: { user: { id: user._id, name: user.name, email: user.email, role: user.role, isActive: user.isActive } },
+    });
+  } catch (err) {
+    if (err.code === 11000) return res.status(409).json({ success: false, message: 'Email already in use' });
+    next(err);
+  }
+};
 
 exports.getAllUsers = async (req, res, next) => {
   try {

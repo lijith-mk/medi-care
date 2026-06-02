@@ -1,5 +1,10 @@
 import api from './api';
 
+export const createAdminUser = async (payload) => {
+  const res = await api.post('/admin/users', payload);
+  return res.data;
+};
+
 export const getAdminUsers = async (params = {}) => {
   const searchParams = new URLSearchParams();
   if (params.role) searchParams.set('role', params.role);

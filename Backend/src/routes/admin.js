@@ -5,6 +5,7 @@ const authorize = require('../middleware/roles');
 const adminController = require('../controllers/adminController');
 
 router.get('/users', auth, authorize('admin'), adminController.getAllUsers);
+router.post('/users', auth, authorize('admin'), adminController.createUser);
 router.put('/users/:id/status', auth, authorize('admin'), adminController.toggleUserStatus);
 router.get('/appointments', auth, authorize('admin'), adminController.getAllAppointments);
 router.get('/stats', auth, authorize('admin'), adminController.getStats);

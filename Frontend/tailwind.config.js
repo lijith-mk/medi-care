@@ -3,10 +3,17 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        brand: {
-          DEFAULT: '#06b6d4', // cyan-500
-          light: '#22d3ee',   // cyan-400
-          dark: '#0891b2',    // cyan-600
+        green: {
+          50:  '#f0fdf4',
+          100: '#dcfce7',
+          200: '#bbf7d0',
+          300: '#86efac',
+          400: '#4ade80',
+          500: '#22c55e',
+          600: '#16a34a',
+          700: '#15803d',
+          800: '#166534',
+          900: '#14532d',
         },
       },
       fontFamily: {
