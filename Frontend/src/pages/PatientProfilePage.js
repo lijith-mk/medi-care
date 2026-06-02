@@ -1,8 +1,25 @@
 import React, { useEffect, useState } from 'react';
 import { getProfile, updateProfile } from '../services/profileService';
 
+const emptyProfile = {
+  medicalHistory: '',
+  allergies: '',
+  chronicDiseases: '',
+};
+
+const normalizeProfile = (profile) => ({
+  medicalHistory: profile?.medicalHistory || '',
+  allergies: Array.isArray(profile?.allergies) ? profile.allergies.join(', ') : (profile?.allergies || ''),
+  chronicDiseases: Array.isArray(profile?.chronicDiseases) ? profile.chronicDiseases.join(', ') : (profile?.chronicDiseases || ''),
+});
+
+const splitListValue = (value) => value
+  .split(',')
+  .map((item) => item.trim())
+  .filter(Boolean);
+
 export default function PatientProfilePage() {
-  const [profile, setProfile] = useState({ medicalHistory: '', allergies: '', chronicDiseases: '' });
+  const [profile, setProfile] = useState(emptyProfile);
   const [editing, setEditing] = useState(false);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -13,7 +30,7 @@ export default function PatientProfilePage() {
       setLoading(true);
       try {
         const res = await getProfile();
-        if (res && res.data && res.data.profile) setProfile(res.data.profile);
+        if (res && res.data && res.data.profile) setProfile(normalizeProfile(res.data.profile));
       } catch (err) {
         console.error(err);
         setMessage({ type: 'error', text: 'Failed to load profile.' });
@@ -29,8 +46,13 @@ export default function PatientProfilePage() {
     setSaving(true);
     setMessage(null);
     try {
-      const res = await updateProfile(profile);
-      if (res && res.data && res.data.profile) setProfile(res.data.profile);
+      const payload = {
+        medicalHistory: profile.medicalHistory,
+        allergies: splitListValue(profile.allergies),
+        chronicDiseases: splitListValue(profile.chronicDiseases),
+      };
+      const res = await updateProfile(payload);
+      if (res && res.data && res.data.profile) setProfile(normalizeProfile(res.data.profile));
       setEditing(false);
       setMessage({ type: 'success', text: 'Profile saved.' });
     } catch (err) {
@@ -58,10 +80,10 @@ export default function PatientProfilePage() {
           <textarea className="w-full border p-2 mb-3" value={profile.medicalHistory || ''} onChange={(e) => setProfile({ ...profile, medicalHistory: e.target.value })} readOnly={!editing} />
 
           <label className="block mb-2">Allergies</label>
-          <input className="w-full border p-2 mb-3" value={profile.allergies || ''} onChange={(e) => setProfile({ ...profile, allergies: e.target.value })} readOnly={!editing} />
+          <input className="w-full border p-2 mb-3" value={profile.allergies || ''} onChange={(e) => setProfile({ ...profile, allergies: e.target.value })} readOnly={!editing} placeholder="comma separated" />
 
           <label className="block mb-2">Chronic Diseases</label>
-          <input className="w-full border p-2 mb-3" value={profile.chronicDiseases || ''} onChange={(e) => setProfile({ ...profile, chronicDiseases: e.target.value })} readOnly={!editing} />
+          <input className="w-full border p-2 mb-3" value={profile.chronicDiseases || ''} onChange={(e) => setProfile({ ...profile, chronicDiseases: e.target.value })} readOnly={!editing} placeholder="comma separated" />
 
           <div className="flex gap-2">
             {editing ? (

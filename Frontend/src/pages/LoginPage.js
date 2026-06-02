@@ -21,7 +21,14 @@ export default function LoginPage() {
       const role = response.data.data.user.role;
       navigate(getRoleHome(role), { replace: true });
     } catch (err) {
-      setError(err?.response?.data?.message || 'Login failed');
+      const status = err?.response?.status;
+      if (status === 401) {
+        setError('Invalid email or password.');
+      } else if (status === 403) {
+        setError(err?.response?.data?.message || 'Your account is disabled.');
+      } else {
+        setError(err?.response?.data?.message || 'Login failed. Please try again.');
+      }
     } finally {
       setLoading(false);
     }
@@ -38,7 +45,11 @@ export default function LoginPage() {
           <input name="password" type="password" placeholder="Password" value={form.password} onChange={handleChange} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 outline-none focus:border-cyan-400" />
         </div>
 
-        {error && <p className="mt-4 rounded-xl bg-red-500/10 px-4 py-3 text-sm text-red-300">{error}</p>}
+        {error && (
+          <div className="mt-4 rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-200" role="alert">
+            {error}
+          </div>
+        )}
 
         <button disabled={loading} className="mt-6 w-full rounded-xl bg-cyan-500 px-4 py-3 font-semibold text-slate-950 transition hover:bg-cyan-400 disabled:opacity-60">
           {loading ? 'Signing in...' : 'Login'}

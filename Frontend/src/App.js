@@ -1,8 +1,8 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
-import HomeRedirect from './components/HomeRedirect';
 import ProtectedRoute from './components/ProtectedRoute';
 import PublicRoute from './components/PublicRoute';
+import LandingPage from './pages/LandingPage';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import PatientDashboardPage from './pages/PatientDashboardPage';
@@ -14,9 +14,9 @@ import LabDashboardPage from './pages/LabDashboardPage';
 export default function App() {
   return (
     <AuthProvider>
-      <BrowserRouter>
+      <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <Routes>
-          <Route path="/" element={<HomeRedirect />} />
+          <Route path="/" element={<LandingPage />} />
 
           <Route element={<PublicRoute />}>
             <Route path="/login" element={<LoginPage />} />

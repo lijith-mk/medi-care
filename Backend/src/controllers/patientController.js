@@ -29,7 +29,20 @@ exports.getProfile = async (req, res, next) => {
   try {
     const userId = req.user.id;
     const profile = await PatientProfile.findOne({ user: userId }).populate('user', 'name email role');
-    if (!profile) return res.status(404).json({ success: false, message: 'Profile not found' });
+    if (!profile) {
+      return res.json({
+        success: true,
+        message: 'Profile not found yet',
+        data: {
+          profile: {
+            medicalHistory: '',
+            allergies: [],
+            chronicDiseases: [],
+            user: { _id: userId },
+          },
+        },
+      });
+    }
     res.json({ success: true, message: 'Profile retrieved', data: { profile } });
   } catch (err) {
     next(err);
