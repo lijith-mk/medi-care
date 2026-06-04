@@ -1,6 +1,7 @@
 const Appointment   = require('../models/Appointment');
 const User          = require('../models/User');
 const DoctorProfile = require('../models/DoctorProfile');
+const DayCounter    = require('../models/DayCounter');
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -22,6 +23,11 @@ function dayRange(dateOnly) {
   const end   = new Date(dateOnly);
   end.setUTCHours(23, 59, 59, 999);
   return { start, end };
+}
+
+/** YYYY-MM-DD string used as the DayCounter key */
+function toDateKey(dateOnly) {
+  return dateOnly.toISOString().split('T')[0];
 }
 
 function populate(query) {
@@ -81,14 +87,11 @@ exports.checkAvailability = async (req, res, next) => {
       return res.json({ success: true, data: { available: false, reason: `Dr. ${doctorUser.name} is not available on ${dayName}` } });
     }
 
-    // Check slot count
+    // Check slot count — use DayCounter for accuracy (matches booking logic)
     const maxPerDay = profile?.maxPatientsPerDay ?? 20;
-    const { start, end } = dayRange(dateOnly);
-    const bookedCount = await Appointment.countDocuments({
-      doctor: doctorId,
-      appointmentDate: { $gte: start, $lte: end },
-      status: { $nin: ['cancelled'] },
-    });
+    const dateKey   = toDateKey(dateOnly);
+    const counter   = await DayCounter.findOne({ doctor: doctorId, date: dateKey });
+    const bookedCount = counter?.count ?? 0;
 
     if (bookedCount >= maxPerDay) {
       return res.json({ success: true, data: { available: false, reason: `Dr. ${doctorUser.name} is fully booked for this date (${bookedCount}/${maxPerDay} slots)` } });
@@ -157,13 +160,9 @@ exports.createAppointment = async (req, res, next) => {
 
     // ── STEP 3: check maxPatientsPerDay ──────────────────────────────────────
     const maxPerDay = profile.maxPatientsPerDay ?? 20;
-    const { start, end } = dayRange(dateOnly);
-
-    const activeCount = await Appointment.countDocuments({
-      doctor,
-      appointmentDate: { $gte: start, $lte: end },
-      status: { $nin: ['cancelled'] },
-    });
+    const dateKey   = toDateKey(dateOnly);
+    const counter   = await DayCounter.findOne({ doctor, date: dateKey });
+    const activeCount = counter?.count ?? 0;
 
     if (activeCount >= maxPerDay) {
       return res.status(400).json({
@@ -186,8 +185,18 @@ exports.createAppointment = async (req, res, next) => {
       });
     }
 
-    // ── STEP 5: assign token = activeCount + 1 ───────────────────────────────
-    const tokenNumber = activeCount + 1;
+    // ── STEP 5: atomically assign token via DayCounter ───────────────────────
+    // This guarantees that even if 100 bookings arrive at the exact same millisecond,
+    // each gets a unique, sequential token number for this doctor + date.
+    const dateKey = toDateKey(dateOnly);
+
+    const counter = await DayCounter.findOneAndUpdate(
+      { doctor, date: dateKey },
+      { $inc: { count: 1 } },
+      { new: true, upsert: true }
+    );
+
+    const tokenNumber = counter.count;
 
     symptoms = Array.isArray(symptoms) ? symptoms : (symptoms ? [symptoms] : []);
 
@@ -197,7 +206,7 @@ exports.createAppointment = async (req, res, next) => {
       appointmentDate: dateOnly,
       tokenNumber,
       symptoms,
-      status: 'confirmed',   // auto-accept all bookings
+      status: 'confirmed',
       createdBy: creatorId,
     });
 

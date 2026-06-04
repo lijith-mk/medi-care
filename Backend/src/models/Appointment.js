@@ -23,4 +23,10 @@ appointmentSchema.index(
   }
 );
 
+// Hard guarantee: no two appointments can ever share the same token for the same doctor+day
+appointmentSchema.index(
+  { doctor: 1, appointmentDate: 1, tokenNumber: 1 },
+  { unique: true }
+);
+
 module.exports = mongoose.model('Appointment', appointmentSchema);
