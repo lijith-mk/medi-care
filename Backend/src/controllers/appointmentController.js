@@ -146,6 +146,8 @@ exports.createAppointment = async (req, res, next) => {
     const profile  = await DoctorProfile.findOne({ user: doctor });
     const dateOnly = toDateOnly(appointmentDate);
     const dayName  = JS_DAY_MAP[dateOnly.getUTCDay()];
+    const dateKey  = toDateKey(dateOnly);           // shared by steps 3 & 5
+    const { start, end } = dayRange(dateOnly);      // shared by step 4
 
     if (!profile) {
       return res.status(400).json({ success: false, message: 'Doctor has not set up availability yet' });
@@ -158,11 +160,10 @@ exports.createAppointment = async (req, res, next) => {
       });
     }
 
-    // ── STEP 3: check maxPatientsPerDay ──────────────────────────────────────
-    const maxPerDay = profile.maxPatientsPerDay ?? 20;
-    const dateKey   = toDateKey(dateOnly);
-    const counter   = await DayCounter.findOne({ doctor, date: dateKey });
-    const activeCount = counter?.count ?? 0;
+    // ── STEP 3: check maxPatientsPerDay via DayCounter ───────────────────────
+    const maxPerDay    = profile.maxPatientsPerDay ?? 20;
+    const existCounter = await DayCounter.findOne({ doctor, date: dateKey });
+    const activeCount  = existCounter?.count ?? 0;
 
     if (activeCount >= maxPerDay) {
       return res.status(400).json({
@@ -186,17 +187,13 @@ exports.createAppointment = async (req, res, next) => {
     }
 
     // ── STEP 5: atomically assign token via DayCounter ───────────────────────
-    // This guarantees that even if 100 bookings arrive at the exact same millisecond,
-    // each gets a unique, sequential token number for this doctor + date.
-    const dateKey = toDateKey(dateOnly);
-
-    const counter = await DayCounter.findOneAndUpdate(
+    // $inc is atomic — concurrent requests each get a unique sequential number.
+    const updatedCounter = await DayCounter.findOneAndUpdate(
       { doctor, date: dateKey },
       { $inc: { count: 1 } },
       { new: true, upsert: true }
     );
-
-    const tokenNumber = counter.count;
+    const tokenNumber = updatedCounter.count;
 
     symptoms = Array.isArray(symptoms) ? symptoms : (symptoms ? [symptoms] : []);
 
@@ -218,7 +215,6 @@ exports.createAppointment = async (req, res, next) => {
       data: { appointment: populated },
     });
   } catch (err) {
-    // Duplicate key from compound index
     if (err.code === 11000) {
       return res.status(409).json({ success: false, message: 'You already have an appointment with this doctor on this date' });
     }
