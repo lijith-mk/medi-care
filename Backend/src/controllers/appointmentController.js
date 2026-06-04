@@ -197,6 +197,7 @@ exports.createAppointment = async (req, res, next) => {
       appointmentDate: dateOnly,
       tokenNumber,
       symptoms,
+      status: 'confirmed',   // auto-accept all bookings
       createdBy: creatorId,
     });
 
@@ -259,8 +260,6 @@ exports.getTodayQueue = async (req, res, next) => {
         status: { $nin: ['cancelled'] },
       }).sort({ tokenNumber: 1 })
     );
-
-    // Summary counts
     const counts = queue.reduce((acc, a) => {
       acc[a.status] = (acc[a.status] || 0) + 1;
       return acc;
@@ -286,11 +285,11 @@ exports.callNextPatient = async (req, res, next) => {
       { status: 'completed' }
     );
 
-    // Get next pending or checked-in by token order
+    // Get next confirmed or checked-in by token order
     const next = await Appointment.findOne({
       doctor: doctorId,
       appointmentDate: { $gte: start, $lte: end },
-      status: { $in: ['pending', 'checked-in'] },
+      status: { $in: ['confirmed', 'pending', 'checked-in'] },
     }).sort({ tokenNumber: 1 });
 
     if (!next) {
@@ -314,7 +313,7 @@ exports.updateAppointmentStatus = async (req, res, next) => {
     const { id } = req.params;
     const { status } = req.body;
 
-    const validStatuses = ['pending', 'checked-in', 'in-progress', 'completed', 'cancelled'];
+    const validStatuses = ['pending', 'confirmed', 'checked-in', 'in-progress', 'completed', 'cancelled'];
     if (!validStatuses.includes(status)) {
       return res.status(400).json({ success: false, message: 'Invalid status' });
     }

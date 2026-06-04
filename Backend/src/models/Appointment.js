@@ -8,8 +8,8 @@ const appointmentSchema = new mongoose.Schema({
   symptoms:        { type: [String], default: [] },
   status: {
     type: String,
-    enum: ['pending', 'checked-in', 'in-progress', 'completed', 'cancelled'],
-    default: 'pending',
+    enum: ['pending', 'confirmed', 'checked-in', 'in-progress', 'completed', 'cancelled'],
+    default: 'confirmed',  // auto-accept all bookings
   },
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
 }, { timestamps: true });

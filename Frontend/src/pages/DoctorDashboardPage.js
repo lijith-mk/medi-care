@@ -3,7 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import DashboardPage from './DashboardPage';
 import ProfileCompletionBanner from '../components/ProfileCompletionBanner';
 import { getProfile, updateProfile } from '../services/profileService';
-import { getTodayQueue, callNextPatient, updateAppointmentStatus } from '../services/appointmentService';
+import { getTodayQueue, callNextPatient, updateAppointmentStatus, getAppointments } from '../services/appointmentService';
 import { ProfileCard, Field, ViewRow, Divider, Alert, SaveBar, inputCls, selectCls } from '../components/ProfileCard';
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -43,6 +43,11 @@ export default function DoctorDashboardPage() {
   const [statusUpdating, setStatusUpdating] = useState(null);
   const [queueMsg, setQueueMsg] = useState(null);
 
+  // ── All appointments state ─────────────────────────────────────────────────
+  const [appointments, setAppointments] = useState([]);
+  const [apptLoading, setApptLoading] = useState(true);
+  const [apptFilter, setApptFilter] = useState('all');
+
   // ── Profile state ──────────────────────────────────────────────────────────
   const [profile, setProfile] = useState(emptyProfile);
   const [draft, setDraft] = useState(emptyProfile);
@@ -62,8 +67,19 @@ export default function DoctorDashboardPage() {
     finally { setQueueLoading(false); }
   };
 
+  // ── Load all appointments ──────────────────────────────────────────────────
+  const loadAppointments = async () => {
+    setApptLoading(true);
+    try {
+      const res = await getAppointments();
+      if (res?.data?.appointments) setAppointments(res.data.appointments);
+    } catch (err) { console.error(err); }
+    finally { setApptLoading(false); }
+  };
+
   useEffect(() => {
     loadQueue();
+    loadAppointments();
     (async () => {
       try {
         const res = await getProfile();
@@ -154,12 +170,17 @@ export default function DoctorDashboardPage() {
 
       {/* Tabs */}
       <div className="flex gap-1 mb-5 border-b border-gray-100">
-        {[['queue', 'Today\'s Queue'], ['profile', 'My Profile']].map(([key, label]) => (
+        {[['queue', "Today's Queue"], ['appointments', 'All Appointments'], ['profile', 'My Profile']].map(([key, label]) => (
           <button key={key} onClick={() => setTab(key)}
             className={`px-4 py-2 text-sm font-medium border-b-2 transition ${
               tab === key ? 'border-green-500 text-green-700' : 'border-transparent text-gray-400 hover:text-gray-600'
             }`}>
             {label}
+            {key === 'appointments' && appointments.length > 0 && (
+              <span className="ml-1.5 rounded-full bg-green-100 px-1.5 py-0.5 text-xs font-semibold text-green-700">
+                {appointments.length}
+              </span>
+            )}
           </button>
         ))}
       </div>
@@ -331,6 +352,98 @@ export default function DoctorDashboardPage() {
                 })}
               </ul>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Appointments Tab ───────────────────────────────────────────────── */}
+      {tab === 'appointments' && (
+        <div className="space-y-4">
+          {/* Summary */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {[
+              { key: 'all',       label: 'Total',     color: 'text-gray-800',   bg: 'bg-white border-gray-100' },
+              { key: 'confirmed', label: 'Confirmed', color: 'text-blue-600',   bg: 'bg-blue-50 border-blue-100' },
+              { key: 'completed', label: 'Completed', color: 'text-green-600',  bg: 'bg-green-50 border-green-100' },
+              { key: 'cancelled', label: 'Cancelled', color: 'text-red-500',    bg: 'bg-red-50 border-red-100' },
+            ].map(({ key, label, color, bg }) => {
+              const apptCounts = appointments.reduce((acc, a) => {
+                acc[a.status] = (acc[a.status] || 0) + 1;
+                return acc;
+              }, {});
+              const count = key === 'all' ? appointments.length : (apptCounts[key] || 0);
+              return (
+                <button key={key} onClick={() => setApptFilter(key)}
+                  className={`rounded-2xl border p-3 text-left shadow-sm transition ${bg} ${
+                    apptFilter === key ? 'ring-2 ring-green-400 ring-offset-1' : 'hover:shadow-md'
+                  }`}>
+                  <p className={`text-xl font-bold ${color}`}>{count}</p>
+                  <p className="text-xs text-gray-400 mt-0.5">{label}</p>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Appointments list */}
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+              <h2 className="text-sm font-semibold text-gray-800">
+                {apptFilter === 'all'
+                  ? 'All Appointments'
+                  : `${apptFilter.charAt(0).toUpperCase() + apptFilter.slice(1)} Appointments`}
+              </h2>
+              <button onClick={loadAppointments} className="flex items-center gap-1 text-xs text-gray-400 hover:text-green-600 transition">
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                Refresh
+              </button>
+            </div>
+
+            {apptLoading ? (
+              <div className="flex items-center justify-center gap-3 py-16 text-sm text-gray-400">
+                <span className="h-4 w-4 rounded-full border-2 border-green-500 border-t-transparent animate-spin" />
+                Loading…
+              </div>
+            ) : (() => {
+              const filtered = apptFilter === 'all'
+                ? appointments
+                : appointments.filter((a) => a.status === apptFilter);
+              
+              return filtered.length === 0 ? (
+                <div className="py-16 text-center text-sm text-gray-400">No appointments found.</div>
+              ) : (
+                <ul className="divide-y divide-gray-100 max-h-[600px] overflow-y-auto">
+                  {filtered.map((a) => (
+                    <li key={a._id} className="flex items-start gap-3 px-5 py-4 hover:bg-gray-50 transition">
+                      {/* Token */}
+                      <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-bold ${
+                        a.status === 'completed'
+                          ? 'bg-green-100 text-green-700'
+                          : a.status === 'cancelled'
+                          ? 'bg-gray-100 text-gray-400'
+                          : 'bg-blue-100 text-blue-700'
+                      }`}>
+                        {a.tokenNumber}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="text-sm font-semibold text-gray-900">{a.patient?.name || '—'}</p>
+                          <StatusBadge status={a.status} />
+                        </div>
+                        <p className="text-xs text-gray-400 mt-0.5">
+                          {new Date(a.appointmentDate).toLocaleDateString('en-US', { dateStyle: 'full' })}
+                        </p>
+                        <p className="text-xs text-gray-400">{a.patient?.email}</p>
+                        {a.symptoms?.length > 0 && (
+                          <p className="text-xs text-gray-400 mt-1">Symptoms: {a.symptoms.join(', ')}</p>
+                        )}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              );
+            })()}
           </div>
         </div>
       )}
