@@ -16,7 +16,8 @@ const allowedFields = {
   patient: ['medicalHistory', 'allergies', 'chronicDiseases', 'currentMedications',
             'bloodGroup', 'height', 'weight', 'address', 'emergencyContact'],
   doctor: ['specialization', 'department', 'qualification', 'experience',
-           'consultationFee', 'availableDays', 'availableTime', 'bio'],
+           'consultationFee', 'availableDays', 'startTime', 'endTime', 'availableTime',
+           'maxPatientsPerDay', 'bio'],
   lab: ['labName', 'labType', 'qualification', 'experience'],
   receptionist: ['deskNumber', 'shift'],
 };
@@ -70,6 +71,13 @@ exports.updateProfile = async (req, res, next) => {
 
     const allowed = allowedFields[role] || [];
     const update = pickFields(req.body, allowed);
+
+    // For doctors: auto-derive availableTime string from startTime + endTime
+    if (role === 'doctor') {
+      const st = update.startTime ?? req.body.startTime;
+      const et = update.endTime   ?? req.body.endTime;
+      if (st && et) update.availableTime = `${st} - ${et}`;
+    }
 
     const profile = await Model.findOneAndUpdate(
       { user: id },

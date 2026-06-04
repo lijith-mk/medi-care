@@ -1,16 +1,24 @@
-const express = require('express');
-const router = express.Router();
-const auth = require('../middleware/auth');
-const authorize = require('../middleware/roles');
-const appointmentController = require('../controllers/appointmentController');
+const express    = require('express');
+const router     = express.Router();
+const auth       = require('../middleware/auth');
+const authorize  = require('../middleware/roles');
+const ctrl       = require('../controllers/appointmentController');
 
-// Create appointment: patient (self) or receptionist/admin on behalf
-router.post('/', auth, authorize('patient', 'receptionist', 'admin'), appointmentController.createAppointment);
+// Public (authenticated) — any logged-in user can list doctors and check availability
+router.get('/doctors',      auth, ctrl.getDoctors);
+router.get('/availability', auth, ctrl.checkAvailability);
 
-// Get appointments: patient -> own, doctor -> assigned, receptionist/admin -> all
-router.get('/', auth, authorize('patient', 'doctor', 'receptionist', 'admin'), appointmentController.getAppointments);
+// Book appointment: patient (self) or receptionist/admin on behalf
+router.post('/', auth, authorize('patient', 'receptionist', 'admin'), ctrl.createAppointment);
 
-// Update appointment status: patients (cancel), doctor (confirm/complete/cancel), receptionist/admin (any)
-router.put('/:id', auth, authorize('patient', 'doctor', 'receptionist', 'admin'), appointmentController.updateAppointmentStatus);
+// Get appointments (role-filtered, optional ?date=YYYY-MM-DD)
+router.get('/', auth, authorize('patient', 'doctor', 'receptionist', 'admin'), ctrl.getAppointments);
+
+// Doctor queue routes
+router.get('/queue/today', auth, authorize('doctor'), ctrl.getTodayQueue);
+router.post('/queue/next', auth, authorize('doctor'), ctrl.callNextPatient);
+
+// Update status
+router.put('/:id/status', auth, authorize('patient', 'doctor', 'receptionist', 'admin'), ctrl.updateAppointmentStatus);
 
 module.exports = router;
