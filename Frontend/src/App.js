@@ -1,5 +1,6 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
+import Layout from './components/Layout';
 import ProtectedRoute from './components/ProtectedRoute';
 import PublicRoute from './components/PublicRoute';
 import LandingPage from './pages/LandingPage';
@@ -16,34 +17,37 @@ export default function App() {
     <AuthProvider>
       <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <Routes>
-          <Route path="/" element={<LandingPage />} />
+          {/* All routes wrapped with Layout to show footer */}
+          <Route element={<Layout />}>
+            <Route path="/" element={<LandingPage />} />
 
-          <Route element={<PublicRoute />}>
-            <Route path="/login" element={<LoginPage />} />
-            <Route path="/register" element={<RegisterPage />} />
+            <Route element={<PublicRoute />}>
+              <Route path="/login" element={<LoginPage />} />
+              <Route path="/register" element={<RegisterPage />} />
+            </Route>
+
+            <Route element={<ProtectedRoute allowedRoles={["patient"]} />}>
+              <Route path="/patient" element={<PatientDashboardPage />} />
+            </Route>
+
+            <Route element={<ProtectedRoute allowedRoles={["doctor"]} />}>
+              <Route path="/doctor" element={<DoctorDashboardPage />} />
+            </Route>
+
+            <Route element={<ProtectedRoute allowedRoles={["admin"]} />}>
+              <Route path="/admin" element={<AdminDashboardPage />} />
+            </Route>
+
+            <Route element={<ProtectedRoute allowedRoles={["receptionist"]} />}>
+              <Route path="/receptionist" element={<ReceptionistDashboardPage />} />
+            </Route>
+
+            <Route element={<ProtectedRoute allowedRoles={["lab"]} />}>
+              <Route path="/lab" element={<LabDashboardPage />} />
+            </Route>
+
+            <Route path="*" element={<Navigate to="/login" replace />} />
           </Route>
-
-          <Route element={<ProtectedRoute allowedRoles={["patient"]} />}>
-            <Route path="/patient" element={<PatientDashboardPage />} />
-          </Route>
-
-          <Route element={<ProtectedRoute allowedRoles={["doctor"]} />}>
-            <Route path="/doctor" element={<DoctorDashboardPage />} />
-          </Route>
-
-          <Route element={<ProtectedRoute allowedRoles={["admin"]} />}>
-            <Route path="/admin" element={<AdminDashboardPage />} />
-          </Route>
-
-          <Route element={<ProtectedRoute allowedRoles={["receptionist"]} />}>
-            <Route path="/receptionist" element={<ReceptionistDashboardPage />} />
-          </Route>
-
-          <Route element={<ProtectedRoute allowedRoles={["lab"]} />}>
-            <Route path="/lab" element={<LabDashboardPage />} />
-          </Route>
-
-          <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>
       </BrowserRouter>
     </AuthProvider>
