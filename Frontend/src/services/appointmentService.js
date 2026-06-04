@@ -17,6 +17,10 @@ export const saveConsultation = (id, payload) =>
 export const addLabRequest = (id, payload) =>
   api.post(`/appointments/${id}/lab-request`, payload).then((r) => r.data);
 
+// Doctor: directly start consultation (for late/skipped patients)
+export const startConsultation = (id) =>
+  api.post(`/appointments/${id}/start`).then((r) => r.data);
+
 // Doctor queue
 export const getTodayQueue   = () => api.get('/appointments/queue/today').then((r) => r.data);
 export const callNextPatient = () => api.post('/appointments/queue/next').then((r) => r.data);

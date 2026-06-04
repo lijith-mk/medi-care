@@ -3,7 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import DashboardPage from './DashboardPage';
 import ProfileCompletionBanner from '../components/ProfileCompletionBanner';
 import { getProfile, updateProfile } from '../services/profileService';
-import { getTodayQueue, callNextPatient, updateAppointmentStatus, getAppointments, saveConsultation, addLabRequest } from '../services/appointmentService';
+import { getTodayQueue, callNextPatient, updateAppointmentStatus, getAppointments, saveConsultation, addLabRequest, startConsultation } from '../services/appointmentService';
 import { getReportsByAppointment } from '../services/labService';
 import { ProfileCard, Field, ViewRow, Divider, Alert, SaveBar, inputCls, selectCls } from '../components/ProfileCard';
 
@@ -13,6 +13,7 @@ const statusConfig = {
   pending:       { label: 'Pending',     cls: 'bg-amber-50 text-amber-700 border-amber-200' },
   confirmed:     { label: 'Confirmed',   cls: 'bg-blue-50 text-blue-700 border-blue-200' },
   'checked-in':  { label: 'Checked In',  cls: 'bg-indigo-50 text-indigo-700 border-indigo-200' },
+  skipped:       { label: 'Skipped',     cls: 'bg-orange-50 text-orange-600 border-orange-200' },
   'in-progress': { label: 'In Progress', cls: 'bg-purple-50 text-purple-700 border-purple-200' },
   completed:     { label: 'Completed',   cls: 'bg-green-50 text-green-700 border-green-200' },
   cancelled:     { label: 'Cancelled',   cls: 'bg-red-50 text-red-600 border-red-200' },
@@ -181,6 +182,20 @@ export default function DoctorDashboardPage() {
       setConsultMsg({ type: 'error', text: err?.response?.data?.message || 'Failed.' });
     } finally { setAddingLab(false); }
   };
+
+  // ── Start consultation directly for any patient (late arrivals / skipped) ──
+  const handleStartConsultation = async (appt) => {
+    setStatusUpdating(appt._id);
+    try {
+      const res = await startConsultation(appt._id);
+      if (res?.data?.appointment) {
+        await loadQueue(); // reload so in-progress shows correctly
+        openConsultation(res.data.appointment);
+      }
+    } catch (err) {
+      setQueueMsg({ type: 'error', text: err?.response?.data?.message || 'Failed to start consultation.' });
+    } finally { setStatusUpdating(null); }
+  };
   const toggleDay = (day) => setDraft((p) => ({
     ...p,
     availableDays: p.availableDays?.includes(day)
@@ -215,6 +230,7 @@ export default function DoctorDashboardPage() {
   // ── Derived ────────────────────────────────────────────────────────────────
   const inProgress = queue.find((a) => a.status === 'in-progress');
   const waiting    = queue.filter((a) => ['confirmed', 'pending', 'checked-in'].includes(a.status));
+  const skipped    = queue.filter((a) => a.status === 'skipped');
   const done       = queue.filter((a) => a.status === 'completed');
 
   return (
@@ -249,10 +265,10 @@ export default function DoctorDashboardPage() {
           {/* Summary cards */}
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             {[
-              { label: 'Total Today', value: queue.length, color: 'text-gray-800', bg: 'bg-white border-gray-100' },
-              { label: 'Waiting',     value: waiting.length, color: 'text-amber-600', bg: 'bg-amber-50 border-amber-100' },
-              { label: 'In Progress', value: counts['in-progress'] || 0, color: 'text-purple-600', bg: 'bg-purple-50 border-purple-100' },
-              { label: 'Completed',   value: done.length, color: 'text-green-600', bg: 'bg-green-50 border-green-100' },
+              { label: 'Total Today', value: queue.length,              color: 'text-gray-800',   bg: 'bg-white border-gray-100' },
+              { label: 'Waiting',     value: waiting.length,            color: 'text-amber-600',  bg: 'bg-amber-50 border-amber-100' },
+              { label: 'Skipped',     value: skipped.length,            color: 'text-orange-600', bg: 'bg-orange-50 border-orange-100' },
+              { label: 'Completed',   value: done.length,               color: 'text-green-600',  bg: 'bg-green-50 border-green-100' },
             ].map(({ label, value, color, bg }) => (
               <div key={label} className={`rounded-2xl border p-4 shadow-sm ${bg}`}>
                 <p className={`text-2xl font-bold ${color}`}>{value}</p>
@@ -398,24 +414,50 @@ export default function DoctorDashboardPage() {
 
                       {/* Action buttons */}
                       <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
-                        {a.status === 'pending' && (
+                        {/* Skip — mark absent patient, "Next Patient" will skip them */}
+                        {['confirmed', 'pending', 'checked-in'].includes(a.status) && (
                           <button
                             disabled={busy}
-                            onClick={() => handleStatusChange(a._id, 'checked-in')}
-                            className="rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-1.5 text-xs font-medium text-blue-600 hover:bg-blue-100 disabled:opacity-40 transition"
+                            onClick={() => handleStatusChange(a._id, 'skipped')}
+                            className="rounded-lg border border-orange-200 bg-orange-50 px-2.5 py-1.5 text-xs font-medium text-orange-600 hover:bg-orange-100 disabled:opacity-40 transition"
+                            title="Patient not present — skip to next token"
                           >
-                            Check In
+                            Skip
                           </button>
                         )}
-                        {(a.status === 'in-progress' || a.status === 'checked-in' || a.status === 'confirmed') && (
+                        {/* Re-activate a skipped patient when they arrive */}
+                        {a.status === 'skipped' && (
                           <button
-                            onClick={() => openConsultation(a)}
-                            className="rounded-lg border border-green-200 bg-green-50 px-2.5 py-1.5 text-xs font-medium text-green-700 hover:bg-green-100 transition"
+                            disabled={busy}
+                            onClick={() => handleStatusChange(a._id, 'confirmed')}
+                            className="rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-1.5 text-xs font-medium text-blue-600 hover:bg-blue-100 disabled:opacity-40 transition"
+                            title="Patient has arrived — restore to queue"
+                          >
+                            Arrived
+                          </button>
+                        )}
+                        {/* Start Consultation directly (pulls into in-progress immediately) */}
+                        {['confirmed', 'pending', 'checked-in', 'skipped'].includes(a.status) && (
+                          <button
+                            disabled={busy}
+                            onClick={() => handleStartConsultation(a)}
+                            className="rounded-lg border border-green-300 bg-green-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-green-700 disabled:opacity-40 transition"
+                            title="Start consultation now regardless of queue order"
                           >
                             Consult
                           </button>
                         )}
-                        {a.status !== 'completed' && a.status !== 'cancelled' && (
+                        {/* Open consultation panel for in-progress */}
+                        {a.status === 'in-progress' && (
+                          <button
+                            onClick={() => openConsultation(a)}
+                            className="rounded-lg border border-purple-300 bg-purple-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-purple-700 transition"
+                          >
+                            Open Notes
+                          </button>
+                        )}
+                        {/* Cancel */}
+                        {!['completed', 'cancelled'].includes(a.status) && (
                           <button
                             disabled={busy}
                             onClick={() => handleStatusChange(a._id, 'cancelled')}

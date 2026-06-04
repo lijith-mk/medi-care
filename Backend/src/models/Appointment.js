@@ -19,7 +19,7 @@ const appointmentSchema = new mongoose.Schema({
   symptoms:        { type: [String], default: [] },
   status: {
     type: String,
-    enum: ['pending', 'confirmed', 'checked-in', 'in-progress', 'completed', 'cancelled'],
+    enum: ['pending', 'confirmed', 'checked-in', 'skipped', 'in-progress', 'completed', 'cancelled'],
     default: 'confirmed',
   },
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },

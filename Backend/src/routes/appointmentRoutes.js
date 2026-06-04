@@ -27,4 +27,7 @@ router.put('/:id/consultation', auth, authorize('doctor'), ctrl.saveConsultation
 // Doctor: add lab test request
 router.post('/:id/lab-request', auth, authorize('doctor'), ctrl.addLabRequest);
 
+// Doctor: directly start consultation for any patient (bypass queue order for late arrivals)
+router.post('/:id/start', auth, authorize('doctor'), ctrl.startConsultation);
+
 module.exports = router;

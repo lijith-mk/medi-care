@@ -322,7 +322,7 @@ exports.callNextPatient = async (req, res, next) => {
       { status: 'completed' }
     );
 
-    // Get next confirmed or checked-in by token order
+    // Get next confirmed or checked-in (NOT skipped) by token order
     const next = await Appointment.findOne({
       doctor: doctorId,
       appointmentDate: { $gte: start, $lte: end },
@@ -350,7 +350,7 @@ exports.updateAppointmentStatus = async (req, res, next) => {
     const { id } = req.params;
     const { status } = req.body;
 
-    const validStatuses = ['pending', 'confirmed', 'checked-in', 'in-progress', 'completed', 'cancelled'];
+    const validStatuses = ['pending', 'confirmed', 'checked-in', 'skipped', 'in-progress', 'completed', 'cancelled'];
     if (!validStatuses.includes(status)) {
       return res.status(400).json({ success: false, message: 'Invalid status' });
     }
@@ -365,7 +365,7 @@ exports.updateAppointmentStatus = async (req, res, next) => {
       if (appt.doctor.toString() !== userId) {
         return res.status(403).json({ success: false, message: 'Forbidden' });
       }
-      const doctorAllowed = ['checked-in', 'in-progress', 'completed', 'cancelled'];
+      const doctorAllowed = ['checked-in', 'skipped', 'in-progress', 'completed', 'cancelled'];
       if (!doctorAllowed.includes(status)) {
         return res.status(400).json({ success: false, message: 'Invalid status transition for doctor' });
       }
@@ -446,6 +446,44 @@ exports.addLabRequest = async (req, res, next) => {
     res.status(201).json({
       success: true,
       message: `Lab request added: ${testType}`,
+      data: { appointment: populated },
+    });
+  } catch (err) { next(err); }
+};
+
+// ── Doctor: directly start consultation for any patient (skip queue order) ───
+// Used when a skipped/late patient arrives and doctor wants to see them now.
+exports.startConsultation = async (req, res, next) => {
+  try {
+    const doctorId = req.user.id;
+    if (req.user.role !== 'doctor') {
+      return res.status(403).json({ success: false, message: 'Forbidden' });
+    }
+
+    const { id } = req.params;
+    const appt = await Appointment.findById(id);
+    if (!appt) return res.status(404).json({ success: false, message: 'Appointment not found' });
+    if (appt.doctor.toString() !== doctorId) {
+      return res.status(403).json({ success: false, message: 'Forbidden' });
+    }
+    if (['completed', 'cancelled'].includes(appt.status)) {
+      return res.status(400).json({ success: false, message: 'Cannot start consultation for a completed or cancelled appointment' });
+    }
+
+    // Only one in-progress at a time — complete the current one first if active
+    const { start, end } = dayRange(toDateOnly(new Date()));
+    await Appointment.updateMany(
+      { doctor: doctorId, appointmentDate: { $gte: start, $lte: end }, status: 'in-progress' },
+      { status: 'completed' }
+    );
+
+    appt.status = 'in-progress';
+    await appt.save();
+
+    const populated = await populate(Appointment.findById(id));
+    res.json({
+      success: true,
+      message: `Consultation started for Token #${appt.tokenNumber}`,
       data: { appointment: populated },
     });
   } catch (err) { next(err); }
