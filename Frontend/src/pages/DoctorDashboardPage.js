@@ -224,9 +224,14 @@ export default function DoctorDashboardPage() {
                     #{inProgress.tokenNumber}
                   </div>
                   <div>
-                    <p className="text-sm font-semibold text-gray-900">{inProgress.patient?.name}</p>
-                    {inProgress.symptoms?.length > 0 && (
-                      <p className="text-xs text-gray-400">{inProgress.symptoms.join(', ')}</p>
+                      <p className="text-sm font-semibold text-gray-900">
+                        {inProgress.patient?.name || inProgress.guestPatient?.name || '—'}
+                        {!inProgress.patient && inProgress.guestPatient?.name && (
+                          <span className="ml-1.5 rounded-full bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium text-blue-600">Walk-in</span>
+                        )}
+                      </p>
+                      {inProgress.symptoms?.length > 0 && (
+                        <p className="text-xs text-gray-400">{inProgress.symptoms.join(', ')}</p>
                     )}
                   </div>
                 </div>
@@ -316,10 +321,17 @@ export default function DoctorDashboardPage() {
                         </div>
                         <div className="min-w-0">
                           <div className="flex items-center gap-2">
-                            <p className="text-sm font-semibold text-gray-900">{a.patient?.name || '—'}</p>
+                            <p className="text-sm font-semibold text-gray-900">
+                              {a.patient?.name || a.guestPatient?.name || '—'}
+                            </p>
+                            {!a.patient && a.guestPatient?.name && (
+                              <span className="rounded-full bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium text-blue-600">Walk-in</span>
+                            )}
                             <StatusBadge status={a.status} />
                           </div>
-                          <p className="text-xs text-gray-400">{a.patient?.email}</p>
+                          <p className="text-xs text-gray-400">
+                            {a.patient?.email || (a.guestPatient?.phone ? `📞 ${a.guestPatient.phone}` : 'No contact')}
+                          </p>
                           {a.symptoms?.length > 0 && (
                             <p className="mt-0.5 text-xs text-gray-400">Symptoms: {a.symptoms.join(', ')}</p>
                           )}

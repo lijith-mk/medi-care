@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { getAppointments, createAppointment, checkAvailability, getDoctors } from '../services/appointmentService';
+import { getAppointments, createAppointment, checkAvailability, getDoctors, updateAppointmentStatus } from '../services/appointmentService';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Constants & helpers
@@ -20,7 +20,8 @@ function getDayAbbr(dateStr) {
 
 const statusConfig = {
   pending:       { label: 'Pending',     cls: 'bg-amber-50 text-amber-700 border-amber-200' },
-  'checked-in':  { label: 'Checked In',  cls: 'bg-blue-50 text-blue-700 border-blue-200' },
+  confirmed:     { label: 'Confirmed',   cls: 'bg-blue-50 text-blue-700 border-blue-200' },
+  'checked-in':  { label: 'Checked In',  cls: 'bg-indigo-50 text-indigo-700 border-indigo-200' },
   'in-progress': { label: 'In Progress', cls: 'bg-purple-50 text-purple-700 border-purple-200' },
   completed:     { label: 'Completed',   cls: 'bg-green-50 text-green-700 border-green-200' },
   cancelled:     { label: 'Cancelled',   cls: 'bg-red-50 text-red-600 border-red-200' },
@@ -391,7 +392,8 @@ export default function PatientAppointmentsPage() {
   const [doctors,      setDoctors]      = useState([]);
   const [loading,      setLoading]      = useState(true);
   const [showForm,     setShowForm]     = useState(false);
-  const [banner,       setBanner]       = useState(null); // { type, text }
+  const [banner,       setBanner]       = useState(null);
+  const [cancelling,   setCancelling]   = useState(null); // appointment _id being cancelled
 
   useEffect(() => {
     (async () => {
@@ -411,8 +413,24 @@ export default function PatientAppointmentsPage() {
     if (appointment) setAppointments((s) => [appointment, ...s]);
     setShowForm(false);
     setBanner({ type: 'success', text: message || 'Appointment booked successfully.' });
-    // auto-dismiss after 5s
     setTimeout(() => setBanner(null), 5000);
+  };
+
+  const handleCancel = async (id) => {
+    if (!window.confirm('Cancel this appointment?')) return;
+    setCancelling(id);
+    try {
+      const res = await updateAppointmentStatus(id, 'cancelled');
+      if (res?.data?.appointment) {
+        setAppointments((s) => s.map((a) => a._id === id ? res.data.appointment : a));
+      }
+      setBanner({ type: 'success', text: 'Appointment cancelled.' });
+      setTimeout(() => setBanner(null), 4000);
+    } catch (err) {
+      setBanner({ type: 'error', text: err?.response?.data?.message || 'Failed to cancel.' });
+    } finally {
+      setCancelling(null);
+    }
   };
 
   return (
@@ -525,28 +543,53 @@ export default function PatientAppointmentsPage() {
           </div>
         ) : (
           <ul className="divide-y divide-gray-100">
-            {appointments.map((a) => (
-              <li key={a._id} className="flex items-start gap-4 px-5 py-4 hover:bg-gray-50 transition">
-                {/* Token circle */}
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-green-600 text-white text-sm font-bold">
-                  {a.tokenNumber}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2 mb-1 flex-wrap">
-                    <p className="text-sm font-semibold text-gray-900">Dr. {a.doctor?.name || '—'}</p>
-                    <StatusBadge status={a.status} />
+            {appointments.map((a) => {
+              const canCancel = a.status === 'confirmed' || a.status === 'pending';
+              const isCancelling = cancelling === a._id;
+              return (
+                <li key={a._id} className="flex items-start gap-4 px-5 py-4 hover:bg-gray-50 transition">
+                  {/* Token circle */}
+                  <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-bold ${
+                    a.status === 'cancelled'  ? 'bg-gray-100 text-gray-400' :
+                    a.status === 'completed'  ? 'bg-green-100 text-green-700' :
+                    'bg-green-600 text-white'
+                  }`}>
+                    {a.tokenNumber}
                   </div>
-                  <p className="text-xs text-gray-400">
-                    {new Date(a.appointmentDate).toLocaleDateString('en-US', { dateStyle: 'full' })}
-                  </p>
-                  {a.symptoms?.length > 0 && (
-                    <p className="mt-1 text-xs text-gray-400 truncate">
-                      Symptoms: {a.symptoms.join(', ')}
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 mb-1 flex-wrap">
+                      <p className="text-sm font-semibold text-gray-900">Dr. {a.doctor?.name || '—'}</p>
+                      <StatusBadge status={a.status} />
+                    </div>
+                    <p className="text-xs text-gray-400">
+                      {new Date(a.appointmentDate).toLocaleDateString('en-US', { dateStyle: 'full' })}
                     </p>
+                    {a.symptoms?.length > 0 && (
+                      <p className="mt-1 text-xs text-gray-400 truncate">
+                        Symptoms: {a.symptoms.join(', ')}
+                      </p>
+                    )}
+                  </div>
+                  {/* Cancel button — only for pending/confirmed */}
+                  {canCancel && (
+                    <button
+                      onClick={() => handleCancel(a._id)}
+                      disabled={isCancelling}
+                      className="shrink-0 flex items-center gap-1 rounded-lg border border-red-200 bg-red-50 px-2.5 py-1.5 text-xs font-medium text-red-600 hover:bg-red-100 disabled:opacity-40 transition"
+                    >
+                      {isCancelling ? (
+                        <span className="h-3 w-3 rounded-full border-2 border-red-400 border-t-transparent animate-spin" />
+                      ) : (
+                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      )}
+                      Cancel
+                    </button>
                   )}
-                </div>
-              </li>
-            ))}
+                </li>
+              );
+            })}
           </ul>
         )}
       </div>

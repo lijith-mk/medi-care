@@ -32,7 +32,7 @@ function toDateKey(dateOnly) {
 
 function populate(query) {
   return query
-    .populate('patient', 'name email')
+    .populate('patient', 'name email phone')
     .populate('doctor',  'name email');
 }
 
@@ -113,18 +113,32 @@ exports.checkAvailability = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-// ── Create appointment (patient self / receptionist on behalf) ────────────────
+// ── Create appointment (patient self / receptionist on behalf / walk-in) ──────
 exports.createAppointment = async (req, res, next) => {
   try {
     const creatorId   = req.user.id;
     const creatorRole = req.user.role;
-    let { patient, doctor, appointmentDate, symptoms } = req.body;
+    let { patient, guestPatient, doctor, appointmentDate, symptoms } = req.body;
 
-    // ── STEP 0: determine patient ────────────────────────────────────────────
+    // ── STEP 0: determine patient or walk-in ─────────────────────────────────
+    let isGuest = false;
+
     if (creatorRole === 'patient') {
+      // Patients always book for themselves
       patient = creatorId;
     } else {
-      if (!patient) return res.status(400).json({ success: false, message: 'Patient is required' });
+      // Receptionist / admin: either registered patient OR walk-in guest
+      const hasGuest = guestPatient?.name && String(guestPatient.name).trim();
+      if (!patient && !hasGuest) {
+        return res.status(400).json({
+          success: false,
+          message: 'Provide either a registered patient or walk-in guest details',
+        });
+      }
+      if (hasGuest) {
+        isGuest = true;
+        patient = null; // no User linked
+      }
     }
 
     if (!doctor)          return res.status(400).json({ success: false, message: 'Doctor is required' });
@@ -139,20 +153,22 @@ exports.createAppointment = async (req, res, next) => {
       return res.status(400).json({ success: false, message: 'Doctor account is inactive' });
     }
 
-    const patientUser = await User.findById(patient);
-    if (!patientUser) return res.status(400).json({ success: false, message: 'Invalid patient' });
+    // Validate registered patient exists (skip for walk-ins)
+    if (!isGuest) {
+      const patientUser = await User.findById(patient);
+      if (!patientUser) return res.status(400).json({ success: false, message: 'Invalid patient' });
+    }
 
     // ── STEP 2: check doctor availability for that day ───────────────────────
     const profile  = await DoctorProfile.findOne({ user: doctor });
     const dateOnly = toDateOnly(appointmentDate);
     const dayName  = JS_DAY_MAP[dateOnly.getUTCDay()];
-    const dateKey  = toDateKey(dateOnly);           // shared by steps 3 & 5
-    const { start, end } = dayRange(dateOnly);      // shared by step 4
+    const dateKey  = toDateKey(dateOnly);
+    const { start, end } = dayRange(dateOnly);
 
     if (!profile) {
       return res.status(400).json({ success: false, message: 'Doctor has not set up availability yet' });
     }
-
     if (!profile.availableDays || !profile.availableDays.includes(dayName)) {
       return res.status(400).json({
         success: false,
@@ -172,22 +188,23 @@ exports.createAppointment = async (req, res, next) => {
       });
     }
 
-    // ── STEP 4: prevent double booking (same patient + doctor + date) ────────
-    const duplicate = await Appointment.findOne({
-      doctor,
-      patient,
-      appointmentDate: { $gte: start, $lte: end },
-      status: { $nin: ['cancelled'] },
-    });
-    if (duplicate) {
-      return res.status(409).json({
-        success: false,
-        message: 'You already have an appointment with this doctor on this date',
+    // ── STEP 4: prevent double booking for registered patients ───────────────
+    if (!isGuest) {
+      const duplicate = await Appointment.findOne({
+        doctor,
+        patient,
+        appointmentDate: { $gte: start, $lte: end },
+        status: { $nin: ['cancelled'] },
       });
+      if (duplicate) {
+        return res.status(409).json({
+          success: false,
+          message: 'This patient already has an appointment with this doctor on this date',
+        });
+      }
     }
 
-    // ── STEP 5: atomically assign token via DayCounter ───────────────────────
-    // $inc is atomic — concurrent requests each get a unique sequential number.
+    // ── STEP 5: atomically assign token ─────────────────────────────────────
     const updatedCounter = await DayCounter.findOneAndUpdate(
       { doctor, date: dateKey },
       { $inc: { count: 1 } },
@@ -197,26 +214,41 @@ exports.createAppointment = async (req, res, next) => {
 
     symptoms = Array.isArray(symptoms) ? symptoms : (symptoms ? [symptoms] : []);
 
-    const appt = await Appointment.create({
-      patient,
+    // Build appointment doc
+    const apptData = {
       doctor,
       appointmentDate: dateOnly,
       tokenNumber,
       symptoms,
       status: 'confirmed',
       createdBy: creatorId,
-    });
+    };
 
+    if (isGuest) {
+      apptData.guestPatient = {
+        name:  String(guestPatient.name).trim(),
+        phone: guestPatient.phone ? String(guestPatient.phone).trim() : '',
+        age:   guestPatient.age   ? Number(guestPatient.age)          : null,
+      };
+    } else {
+      apptData.patient = patient;
+    }
+
+    const appt = await Appointment.create(apptData);
     const populated = await populate(Appointment.findById(appt._id));
+
+    const patientLabel = isGuest
+      ? guestPatient.name
+      : (await User.findById(patient).select('name'))?.name || 'Patient';
 
     res.status(201).json({
       success: true,
-      message: `Appointment booked! Your token number is ${tokenNumber}`,
+      message: `Appointment booked for ${patientLabel}! Token number: ${tokenNumber}`,
       data: { appointment: populated },
     });
   } catch (err) {
     if (err.code === 11000) {
-      return res.status(409).json({ success: false, message: 'You already have an appointment with this doctor on this date' });
+      return res.status(409).json({ success: false, message: 'This patient already has an appointment with this doctor on this date' });
     }
     next(err);
   }

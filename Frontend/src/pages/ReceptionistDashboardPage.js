@@ -143,9 +143,19 @@ function DoctorCard({ doctor, selectedDate, checking, availInfo }) {
 
 // ─── Booking form for receptionist ───────────────────────────────────────────
 function ReceptionistBookingForm({ doctors, patients, onBooked }) {
-  const [selectedDoctor,  setSelectedDoctor]  = useState(null);
+  const [mode, setMode] = useState('registered'); // 'registered' | 'walkin'
+
+  // Registered patient fields
   const [selectedPatient, setSelectedPatient] = useState('');
   const [patientSearch,   setPatientSearch]   = useState('');
+
+  // Walk-in guest fields
+  const [guestName,  setGuestName]  = useState('');
+  const [guestPhone, setGuestPhone] = useState('');
+  const [guestAge,   setGuestAge]   = useState('');
+
+  // Shared fields
+  const [selectedDoctor,  setSelectedDoctor]  = useState(null);
   const [selectedDate,    setSelectedDate]    = useState('');
   const [symptoms,        setSymptoms]        = useState('');
   const [availInfo,       setAvailInfo]       = useState(null);
@@ -180,28 +190,51 @@ function ReceptionistBookingForm({ doctors, patients, onBooked }) {
     runCheck(selectedDoctor?._id, e.target.value);
   };
 
-  const canBook = selectedPatient && selectedDoctor && selectedDate && availInfo?.available && !checking;
+  const switchMode = (m) => {
+    setMode(m); setError('');
+    setSelectedPatient(''); setPatientSearch('');
+    setGuestName(''); setGuestPhone(''); setGuestAge('');
+  };
+
+  const canBook = selectedDoctor && selectedDate && availInfo?.available && !checking &&
+    (mode === 'walkin' ? guestName.trim() : selectedPatient);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!selectedPatient) { setError('Please select a patient.'); return; }
-    if (!selectedDoctor)  { setError('Please select a doctor.'); return; }
-    if (!selectedDate)    { setError('Please select a date.'); return; }
+    if (!selectedDoctor)  { setError('Please select a doctor.');      return; }
+    if (!selectedDate)    { setError('Please select a date.');        return; }
     if (!availInfo?.available) {
-      setError(availInfo?.reason || 'Doctor is not available on this date.');
-      return;
+      setError(availInfo?.reason || 'Doctor is not available on this date.'); return;
     }
+    if (mode === 'registered' && !selectedPatient) {
+      setError('Please select a registered patient.'); return;
+    }
+    if (mode === 'walkin' && !guestName.trim()) {
+      setError('Please enter the walk-in patient\'s name.'); return;
+    }
+
     setSubmitting(true); setError('');
     try {
-      const res = await createAppointment({
-        patient:         selectedPatient,
+      const payload = {
         doctor:          selectedDoctor._id,
         appointmentDate: selectedDate,
         symptoms,
-      });
+      };
+      if (mode === 'registered') {
+        payload.patient = selectedPatient;
+      } else {
+        payload.guestPatient = {
+          name:  guestName.trim(),
+          phone: guestPhone.trim(),
+          age:   guestAge ? Number(guestAge) : undefined,
+        };
+      }
+
+      const res = await createAppointment(payload);
       onBooked(res?.data?.appointment, res?.message || 'Appointment booked.');
       // reset
       setSelectedDoctor(null); setSelectedPatient(''); setPatientSearch('');
+      setGuestName(''); setGuestPhone(''); setGuestAge('');
       setSelectedDate(''); setSymptoms(''); setAvailInfo(null);
     } catch (err) {
       setError(err?.response?.data?.message || 'Booking failed. Please try again.');
@@ -210,48 +243,83 @@ function ReceptionistBookingForm({ doctors, patients, onBooked }) {
 
   return (
     <div className="space-y-4">
-      {/* Patient selector */}
-      <div>
-        <label className="block text-xs font-semibold text-gray-500 mb-1.5">Search Patient</label>
-        <input
-          type="text"
-          className={inputCls}
-          placeholder="Type patient name or email…"
-          value={patientSearch}
-          onChange={(e) => setPatientSearch(e.target.value)}
-        />
+
+      {/* ── Mode toggle ── */}
+      <div className="flex rounded-lg border border-gray-200 p-0.5 bg-gray-50 gap-0.5">
+        {[
+          { key: 'registered', label: 'Registered Patient', icon: <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg> },
+          { key: 'walkin',     label: 'Walk-in / Guest',    icon: <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" /></svg> },
+        ].map(({ key, label, icon }) => (
+          <button key={key} type="button" onClick={() => switchMode(key)}
+            className={`flex-1 flex items-center justify-center gap-1.5 rounded-md px-3 py-2 text-xs font-medium transition ${
+              mode === key
+                ? 'bg-white text-green-700 shadow-sm border border-gray-200'
+                : 'text-gray-500 hover:text-gray-700'
+            }`}>
+            {icon}{label}
+          </button>
+        ))}
       </div>
-      <div>
-        <label className="block text-xs font-semibold text-gray-500 mb-1.5">Select Patient</label>
-        <select
-          className={selectCls}
-          value={selectedPatient}
-          onChange={(e) => setSelectedPatient(e.target.value)}
-          required
-        >
-          <option value="">Choose a patient…</option>
-          {filteredPatients.map((p) => (
-            <option key={p._id} value={p._id}>
-              {p.name} — {p.email}
-            </option>
-          ))}
-        </select>
-        {filteredPatients.length === 0 && patientSearch && (
-          <p className="mt-1 text-xs text-gray-400">No patients found for "{patientSearch}"</p>
-        )}
-      </div>
+
+      {/* ── Registered patient fields ── */}
+      {mode === 'registered' && (
+        <>
+          <div>
+            <label className="block text-xs font-semibold text-gray-500 mb-1.5">Search Patient</label>
+            <input type="text" className={inputCls} placeholder="Type name or email…"
+              value={patientSearch} onChange={(e) => setPatientSearch(e.target.value)} />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-gray-500 mb-1.5">Select Patient</label>
+            <select className={selectCls} value={selectedPatient}
+              onChange={(e) => setSelectedPatient(e.target.value)} required>
+              <option value="">Choose a patient…</option>
+              {filteredPatients.map((p) => (
+                <option key={p._id} value={p._id}>{p.name} — {p.email}</option>
+              ))}
+            </select>
+            {filteredPatients.length === 0 && patientSearch && (
+              <p className="mt-1 text-xs text-gray-400">No patients found for "{patientSearch}"</p>
+            )}
+          </div>
+        </>
+      )}
+
+      {/* ── Walk-in guest fields ── */}
+      {mode === 'walkin' && (
+        <div className="rounded-xl border border-blue-100 bg-blue-50/40 p-3 space-y-3">
+          <div className="flex items-center gap-2 mb-1">
+            <svg className="w-4 h-4 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <p className="text-xs text-blue-700 font-medium">Walk-in — no account required</p>
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-gray-500 mb-1">Full Name *</label>
+            <input type="text" className={inputCls} placeholder="e.g. Rahul Kumar"
+              value={guestName} onChange={(e) => setGuestName(e.target.value)} required />
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="block text-xs font-semibold text-gray-500 mb-1">Phone</label>
+              <input type="tel" className={inputCls} placeholder="98765 43210"
+                value={guestPhone} onChange={(e) => setGuestPhone(e.target.value)} maxLength={10} />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-500 mb-1">Age</label>
+              <input type="number" className={inputCls} placeholder="e.g. 35"
+                min={1} max={120} value={guestAge} onChange={(e) => setGuestAge(e.target.value)} />
+            </div>
+          </div>
+        </div>
+      )}
 
       <hr className="border-gray-100" />
 
-      {/* Doctor selector */}
+      {/* ── Doctor selector ── */}
       <div>
         <label className="block text-xs font-semibold text-gray-500 mb-1.5">Select Doctor</label>
-        <select
-          className={selectCls}
-          value={selectedDoctor?._id || ''}
-          onChange={handleDoctorChange}
-          required
-        >
+        <select className={selectCls} value={selectedDoctor?._id || ''} onChange={handleDoctorChange} required>
           <option value="">Choose a doctor…</option>
           {doctors.map((d) => (
             <option key={d._id} value={d._id}>
@@ -263,48 +331,32 @@ function ReceptionistBookingForm({ doctors, patients, onBooked }) {
 
       {/* Doctor detail card */}
       {selectedDoctor ? (
-        <DoctorCard
-          doctor={selectedDoctor}
-          selectedDate={selectedDate}
-          checking={checking}
-          availInfo={availInfo}
-        />
+        <DoctorCard doctor={selectedDoctor} selectedDate={selectedDate} checking={checking} availInfo={availInfo} />
       ) : (
-        <div className="rounded-xl border border-dashed border-gray-200 py-6 text-center text-xs text-gray-400">
+        <div className="rounded-xl border border-dashed border-gray-200 py-5 text-center text-xs text-gray-400">
           Doctor details appear after selection
         </div>
       )}
 
-      {/* Date picker */}
+      {/* ── Date picker ── */}
       <div>
         <label className="block text-xs font-semibold text-gray-500 mb-1.5">Appointment Date</label>
-        <input
-          type="date"
-          className={inputCls}
-          value={selectedDate}
+        <input type="date" className={inputCls} value={selectedDate}
           min={new Date().toISOString().split('T')[0]}
-          onChange={handleDateChange}
-          disabled={!selectedDoctor}
-          required
-        />
+          onChange={handleDateChange} disabled={!selectedDoctor} required />
         {!selectedDoctor && <p className="mt-1 text-[11px] text-gray-400">Select a doctor first</p>}
       </div>
 
-      {/* Symptoms */}
+      {/* ── Symptoms ── */}
       <div>
         <label className="block text-xs font-semibold text-gray-500 mb-1.5">
           Symptoms <span className="font-normal text-gray-400">(optional)</span>
         </label>
-        <textarea
-          rows={2}
-          className={inputCls + ' resize-none'}
-          placeholder="Patient's symptoms…"
-          value={symptoms}
-          onChange={(e) => setSymptoms(e.target.value)}
-        />
+        <textarea rows={2} className={inputCls + ' resize-none'} placeholder="Patient's symptoms…"
+          value={symptoms} onChange={(e) => setSymptoms(e.target.value)} />
       </div>
 
-      {/* Error */}
+      {/* ── Error ── */}
       {error && (
         <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-xs text-red-600">
           <svg className="w-4 h-4 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -314,19 +366,17 @@ function ReceptionistBookingForm({ doctors, patients, onBooked }) {
         </div>
       )}
 
-      {/* Submit */}
-      <button
-        type="button"
-        onClick={handleSubmit}
-        disabled={!canBook || submitting}
+      {/* ── Submit ── */}
+      <button type="button" onClick={handleSubmit} disabled={!canBook || submitting}
         className={`w-full flex items-center justify-center gap-2 rounded-lg py-2.5 text-sm font-semibold text-white transition ${
           canBook && !submitting ? 'bg-green-600 hover:bg-green-700' : 'bg-gray-300 cursor-not-allowed'
-        }`}
-      >
+        }`}>
         {submitting ? (
           <><span className="h-4 w-4 rounded-full border-2 border-white border-t-transparent animate-spin" />Booking…</>
         ) : (
-          <><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>Book Appointment</>
+          <><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+            {mode === 'walkin' ? 'Book Walk-in Appointment' : 'Book Appointment'}
+          </>
         )}
       </button>
     </div>
@@ -530,7 +580,12 @@ export default function ReceptionistDashboardPage() {
                           </div>
                           <div className="min-w-0">
                             <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
-                              <p className="text-sm font-semibold text-gray-900 truncate">{a.patient?.name || '—'}</p>
+                              <p className="text-sm font-semibold text-gray-900 truncate">
+                                {a.patient?.name || a.guestPatient?.name || '—'}
+                                {!a.patient && a.guestPatient?.name && (
+                                  <span className="ml-1.5 rounded-full bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium text-blue-600">Walk-in</span>
+                                )}
+                              </p>
                               <svg className="w-3 h-3 text-gray-300 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
                               </svg>
@@ -539,6 +594,9 @@ export default function ReceptionistDashboardPage() {
                             <p className="text-xs text-gray-400">
                               {new Date(a.appointmentDate).toLocaleDateString('en-US', { dateStyle: 'medium' })}
                             </p>
+                            {a.guestPatient?.phone && (
+                              <p className="text-xs text-gray-400">📞 {a.guestPatient.phone}</p>
+                            )}
                             {a.symptoms?.length > 0 && (
                               <p className="text-xs text-gray-400 truncate mt-0.5">Symptoms: {a.symptoms.join(', ')}</p>
                             )}
