@@ -3,14 +3,16 @@ import { useAuth } from '../context/AuthContext';
 import DashboardPage from './DashboardPage';
 import ProfileCompletionBanner from '../components/ProfileCompletionBanner';
 import { getProfile, updateProfile } from '../services/profileService';
-import { getTodayQueue, callNextPatient, updateAppointmentStatus, getAppointments } from '../services/appointmentService';
+import { getTodayQueue, callNextPatient, updateAppointmentStatus, getAppointments, saveConsultation, addLabRequest } from '../services/appointmentService';
+import { getReportsByAppointment } from '../services/labService';
 import { ProfileCard, Field, ViewRow, Divider, Alert, SaveBar, inputCls, selectCls } from '../components/ProfileCard';
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 const statusConfig = {
   pending:       { label: 'Pending',     cls: 'bg-amber-50 text-amber-700 border-amber-200' },
-  'checked-in':  { label: 'Checked In',  cls: 'bg-blue-50 text-blue-700 border-blue-200' },
+  confirmed:     { label: 'Confirmed',   cls: 'bg-blue-50 text-blue-700 border-blue-200' },
+  'checked-in':  { label: 'Checked In',  cls: 'bg-indigo-50 text-indigo-700 border-indigo-200' },
   'in-progress': { label: 'In Progress', cls: 'bg-purple-50 text-purple-700 border-purple-200' },
   completed:     { label: 'Completed',   cls: 'bg-green-50 text-green-700 border-green-200' },
   cancelled:     { label: 'Cancelled',   cls: 'bg-red-50 text-red-600 border-red-200' },
@@ -47,6 +49,15 @@ export default function DoctorDashboardPage() {
   const [appointments, setAppointments] = useState([]);
   const [apptLoading, setApptLoading] = useState(true);
   const [apptFilter, setApptFilter] = useState('all');
+
+  // ── Consultation panel state ───────────────────────────────────────────────
+  const [activeAppt,     setActiveAppt]     = useState(null); // appointment being consulted
+  const [consultation,   setConsultation]   = useState({ notes: '', diagnosis: '', prescription: '' });
+  const [labReqForm,     setLabReqForm]     = useState({ testType: '', notes: '' });
+  const [savingConsult,  setSavingConsult]  = useState(false);
+  const [addingLab,      setAddingLab]      = useState(false);
+  const [consultMsg,     setConsultMsg]     = useState(null);
+  const [apptReports,    setApptReports]    = useState([]);
 
   // ── Profile state ──────────────────────────────────────────────────────────
   const [profile, setProfile] = useState(emptyProfile);
@@ -122,7 +133,54 @@ export default function DoctorDashboardPage() {
     } finally { setStatusUpdating(null); }
   };
 
-  // ── Profile helpers ────────────────────────────────────────────────────────
+  // ── Open consultation panel ───────────────────────────────────────────────
+  const openConsultation = async (appt) => {
+    setActiveAppt(appt);
+    setConsultation({
+      notes:        appt.notes        || '',
+      diagnosis:    appt.diagnosis    || '',
+      prescription: appt.prescription || '',
+    });
+    setLabReqForm({ testType: '', notes: '' });
+    setConsultMsg(null);
+    // Load reports for this appointment
+    try {
+      const res = await getReportsByAppointment(appt._id);
+      setApptReports(res?.data?.reports || []);
+    } catch { setApptReports([]); }
+  };
+
+  const handleSaveConsultation = async () => {
+    setSavingConsult(true); setConsultMsg(null);
+    try {
+      const res = await saveConsultation(activeAppt._id, consultation);
+      if (res?.data?.appointment) {
+        setQueue((prev) => prev.map((a) => a._id === activeAppt._id ? res.data.appointment : a));
+        setActiveAppt(res.data.appointment);
+      }
+      setConsultMsg({ type: 'success', text: 'Consultation saved.' });
+    } catch (err) {
+      setConsultMsg({ type: 'error', text: err?.response?.data?.message || 'Save failed.' });
+    } finally { setSavingConsult(false); }
+  };
+
+  const handleAddLabRequest = async () => {
+    if (!labReqForm.testType.trim()) {
+      setConsultMsg({ type: 'error', text: 'Enter a test type.' }); return;
+    }
+    setAddingLab(true); setConsultMsg(null);
+    try {
+      const res = await addLabRequest(activeAppt._id, labReqForm);
+      if (res?.data?.appointment) {
+        setQueue((prev) => prev.map((a) => a._id === activeAppt._id ? res.data.appointment : a));
+        setActiveAppt(res.data.appointment);
+        setLabReqForm({ testType: '', notes: '' });
+      }
+      setConsultMsg({ type: 'success', text: `Lab request added: ${labReqForm.testType}` });
+    } catch (err) {
+      setConsultMsg({ type: 'error', text: err?.response?.data?.message || 'Failed.' });
+    } finally { setAddingLab(false); }
+  };
   const toggleDay = (day) => setDraft((p) => ({
     ...p,
     availableDays: p.availableDays?.includes(day)
@@ -156,7 +214,7 @@ export default function DoctorDashboardPage() {
 
   // ── Derived ────────────────────────────────────────────────────────────────
   const inProgress = queue.find((a) => a.status === 'in-progress');
-  const waiting    = queue.filter((a) => a.status === 'pending' || a.status === 'checked-in');
+  const waiting    = queue.filter((a) => ['confirmed', 'pending', 'checked-in'].includes(a.status));
   const done       = queue.filter((a) => a.status === 'completed');
 
   return (
@@ -349,6 +407,14 @@ export default function DoctorDashboardPage() {
                             Check In
                           </button>
                         )}
+                        {(a.status === 'in-progress' || a.status === 'checked-in' || a.status === 'confirmed') && (
+                          <button
+                            onClick={() => openConsultation(a)}
+                            className="rounded-lg border border-green-200 bg-green-50 px-2.5 py-1.5 text-xs font-medium text-green-700 hover:bg-green-100 transition"
+                          >
+                            Consult
+                          </button>
+                        )}
                         {a.status !== 'completed' && a.status !== 'cancelled' && (
                           <button
                             disabled={busy}
@@ -364,6 +430,137 @@ export default function DoctorDashboardPage() {
                 })}
               </ul>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Consultation Panel (modal-style slide-in) ───────────────────────── */}
+      {activeAppt && (
+        <div className="fixed inset-0 z-50 flex items-start justify-end bg-black/30" onClick={(e) => { if (e.target === e.currentTarget) setActiveAppt(null); }}>
+          <div className="w-full max-w-lg h-full bg-white shadow-2xl overflow-y-auto flex flex-col">
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 bg-green-50 sticky top-0">
+              <div>
+                <p className="text-sm font-bold text-gray-900">
+                  Token #{activeAppt.tokenNumber} — {activeAppt.patient?.name || activeAppt.guestPatient?.name || '—'}
+                </p>
+                <p className="text-xs text-gray-400">{activeAppt.patient?.email || (activeAppt.guestPatient?.phone ? `📞 ${activeAppt.guestPatient.phone}` : '')}</p>
+              </div>
+              <button onClick={() => setActiveAppt(null)} className="rounded-lg p-1.5 hover:bg-green-100 transition">
+                <svg className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+
+            <div className="flex-1 p-5 space-y-5">
+              {/* Alert */}
+              {consultMsg && (
+                <div className={`rounded-lg border px-3 py-2.5 text-xs ${consultMsg.type === 'error' ? 'bg-red-50 border-red-200 text-red-600' : 'bg-green-50 border-green-200 text-green-700'}`}>
+                  {consultMsg.text}
+                </div>
+              )}
+
+              {/* Symptoms */}
+              {activeAppt.symptoms?.length > 0 && (
+                <div className="rounded-lg bg-amber-50 border border-amber-100 px-4 py-3">
+                  <p className="text-xs font-semibold text-amber-700 mb-1">Symptoms</p>
+                  <p className="text-xs text-amber-800">{activeAppt.symptoms.join(', ')}</p>
+                </div>
+              )}
+
+              {/* Consultation notes */}
+              <div className="space-y-3">
+                <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Consultation</h3>
+                <Field label="Doctor Notes">
+                  <textarea rows={3} className={inputCls + ' resize-none'} placeholder="Clinical observations, examination findings…"
+                    value={consultation.notes} onChange={(e) => setConsultation({ ...consultation, notes: e.target.value })} />
+                </Field>
+                <Field label="Diagnosis">
+                  <input type="text" className={inputCls} placeholder="Primary diagnosis…"
+                    value={consultation.diagnosis} onChange={(e) => setConsultation({ ...consultation, diagnosis: e.target.value })} />
+                </Field>
+                <Field label="Prescription">
+                  <textarea rows={3} className={inputCls + ' resize-none'} placeholder="Medicine name, dosage, duration…"
+                    value={consultation.prescription} onChange={(e) => setConsultation({ ...consultation, prescription: e.target.value })} />
+                </Field>
+                <button onClick={handleSaveConsultation} disabled={savingConsult}
+                  className="flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-xs font-semibold text-white hover:bg-green-700 disabled:opacity-50 transition">
+                  {savingConsult ? <><span className="h-3.5 w-3.5 rounded-full border-2 border-white border-t-transparent animate-spin" />Saving…</> : 'Save Consultation'}
+                </button>
+              </div>
+
+              {/* Lab requests */}
+              <div className="space-y-3">
+                <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Lab Requests</h3>
+
+                {/* Existing requests */}
+                {activeAppt.labRequests?.length > 0 && (
+                  <ul className="space-y-2">
+                    {activeAppt.labRequests.map((r) => (
+                      <li key={r._id} className={`flex items-center justify-between rounded-lg border px-3 py-2 text-xs ${
+                        r.labStatus === 'completed' ? 'bg-green-50 border-green-200' : 'bg-amber-50 border-amber-200'
+                      }`}>
+                        <div>
+                          <p className="font-semibold text-gray-800">{r.testType}</p>
+                          {r.notes && <p className="text-gray-500">{r.notes}</p>}
+                        </div>
+                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold border ${
+                          r.labStatus === 'completed'
+                            ? 'bg-green-100 text-green-700 border-green-200'
+                            : 'bg-amber-100 text-amber-700 border-amber-200'
+                        }`}>
+                          {r.labStatus}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+
+                {/* Add new request */}
+                <div className="rounded-xl border border-gray-100 bg-gray-50 p-3 space-y-2">
+                  <p className="text-xs font-medium text-gray-500">Add Lab Test Request</p>
+                  <input type="text" className={inputCls} placeholder="Test type (e.g. Blood Test, X-Ray, ECG)"
+                    value={labReqForm.testType} onChange={(e) => setLabReqForm({ ...labReqForm, testType: e.target.value })} />
+                  <input type="text" className={inputCls} placeholder="Instructions for lab (optional)"
+                    value={labReqForm.notes} onChange={(e) => setLabReqForm({ ...labReqForm, notes: e.target.value })} />
+                  <button onClick={handleAddLabRequest} disabled={addingLab}
+                    className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50 transition">
+                    {addingLab ? <span className="h-3 w-3 rounded-full border-2 border-white border-t-transparent animate-spin" /> : '+'}
+                    Request Test
+                  </button>
+                </div>
+              </div>
+
+              {/* Lab reports */}
+              {apptReports.length > 0 && (
+                <div className="space-y-2">
+                  <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Lab Reports</h3>
+                  {apptReports.map((r) => (
+                    <div key={r._id} className="flex items-center justify-between rounded-lg border border-gray-100 bg-white px-3 py-2.5">
+                      <div>
+                        <p className="text-xs font-semibold text-gray-800">{r.testType}</p>
+                        <p className="text-[11px] text-gray-400">by {r.uploadedBy?.name} · {new Date(r.createdAt).toLocaleDateString()}</p>
+                      </div>
+                      <a href={r.fileUrl} target="_blank" rel="noopener noreferrer"
+                        className="rounded-lg border border-blue-200 px-2.5 py-1.5 text-xs font-medium text-blue-600 hover:bg-blue-50 transition">
+                        View
+                      </a>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Complete button */}
+              {activeAppt.status !== 'completed' && activeAppt.status !== 'cancelled' && (
+                <button onClick={async () => {
+                  await handleSaveConsultation();
+                  await handleStatusChange(activeAppt._id, 'completed');
+                  setActiveAppt(null);
+                }}
+                  className="w-full rounded-lg bg-green-700 py-2.5 text-sm font-semibold text-white hover:bg-green-800 transition">
+                  Mark as Completed
+                </button>
+              )}
+            </div>
           </div>
         </div>
       )}

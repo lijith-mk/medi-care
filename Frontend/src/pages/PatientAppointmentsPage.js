@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { getAppointments, createAppointment, checkAvailability, getDoctors, updateAppointmentStatus } from '../services/appointmentService';
+import { getMyReports } from '../services/labService';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Constants & helpers
@@ -390,17 +391,21 @@ function BookingForm({ doctors, onBooked, onClose }) {
 export default function PatientAppointmentsPage() {
   const [appointments, setAppointments] = useState([]);
   const [doctors,      setDoctors]      = useState([]);
+  const [labReports,   setLabReports]   = useState([]);
   const [loading,      setLoading]      = useState(true);
   const [showForm,     setShowForm]     = useState(false);
   const [banner,       setBanner]       = useState(null);
-  const [cancelling,   setCancelling]   = useState(null); // appointment _id being cancelled
+  const [cancelling,   setCancelling]   = useState(null);
 
   useEffect(() => {
     (async () => {
       try {
-        const [apptRes, docRes] = await Promise.all([getAppointments(), getDoctors()]);
+        const [apptRes, docRes, repRes] = await Promise.all([
+          getAppointments(), getDoctors(), getMyReports()
+        ]);
         if (apptRes?.data?.appointments) setAppointments(apptRes.data.appointments);
         if (docRes?.data?.doctors)       setDoctors(docRes.data.doctors);
+        if (repRes?.data?.reports)       setLabReports(repRes.data.reports);
       } catch {
         setBanner({ type: 'error', text: 'Failed to load data. Please refresh.' });
       } finally {
@@ -590,6 +595,66 @@ export default function PatientAppointmentsPage() {
                 </li>
               );
             })}
+          </ul>
+        )}
+      </div>
+
+      {/* ── Lab Reports ── */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-rose-50 text-rose-500">
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+            </div>
+            <h2 className="text-sm font-semibold text-gray-800">My Lab Reports</h2>
+          </div>
+          <span className="rounded-full bg-gray-50 border border-gray-200 px-2.5 py-0.5 text-xs text-gray-400">
+            {labReports.length}
+          </span>
+        </div>
+
+        {loading ? (
+          <div className="flex items-center justify-center gap-3 py-10 text-sm text-gray-400">
+            <span className="h-4 w-4 rounded-full border-2 border-green-500 border-t-transparent animate-spin" />
+            Loading…
+          </div>
+        ) : labReports.length === 0 ? (
+          <div className="py-10 text-center text-sm text-gray-400">No lab reports yet.</div>
+        ) : (
+          <ul className="divide-y divide-gray-100">
+            {labReports.map((r) => (
+              <li key={r._id} className="flex items-start gap-4 px-5 py-4 hover:bg-gray-50 transition">
+                <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${
+                  r.fileType === 'pdf' ? 'bg-red-50 text-red-500' : 'bg-blue-50 text-blue-500'
+                }`}>
+                  {r.fileType === 'pdf' ? (
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                    </svg>
+                  ) : (
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-gray-900">{r.testType}</p>
+                  <p className="text-xs text-gray-400">
+                    Dr. {r.doctor?.name || '—'} · {new Date(r.createdAt).toLocaleDateString('en-US', { dateStyle: 'medium' })}
+                  </p>
+                  {r.notes && <p className="text-xs text-gray-500 mt-0.5 italic">"{r.notes}"</p>}
+                </div>
+                <a href={r.fileUrl} target="_blank" rel="noopener noreferrer"
+                  className="shrink-0 flex items-center gap-1 rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-1.5 text-xs font-medium text-blue-600 hover:bg-blue-100 transition">
+                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                  </svg>
+                  View / Download
+                </a>
+              </li>
+            ))}
           </ul>
         )}
       </div>

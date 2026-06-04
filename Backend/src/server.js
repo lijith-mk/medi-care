@@ -39,6 +39,9 @@ const start = async () => {
     // extended profile routes (doctor, lab, receptionist)
     const profileRoutes = require('./routes/profileRoutes');
     app.use('/api/profile', profileRoutes);
+    // lab routes (test requests + reports)
+    const labRoutes = require('./routes/labRoutes');
+    app.use('/api/lab', labRoutes);
     app.get('/', (req, res) => res.json({ status: 'ok', message: 'Smart Healthcare API' }));
     app.use(require('./middleware/errorHandler'));
 

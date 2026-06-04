@@ -48,3 +48,20 @@ exports.uploadDocument = multer({
   limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB
   fileFilter,
 }).single('document');
+
+// Lab report storage — PDF or image, stored in lab-reports/ folder
+const labReportStorage = new CloudinaryStorage({
+  cloudinary,
+  params: (req) => ({
+    folder: 'medicare/lab-reports',
+    public_id: `report_${req.user.id}_${Date.now()}`,
+    resource_type: 'auto',
+    allowed_formats: ['jpg', 'jpeg', 'png', 'pdf', 'webp'],
+  }),
+});
+
+exports.uploadLabReport = multer({
+  storage: labReportStorage,
+  limits: { fileSize: 15 * 1024 * 1024 }, // 15 MB
+  fileFilter,
+}).single('report');

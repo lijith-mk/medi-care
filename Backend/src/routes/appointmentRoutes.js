@@ -21,4 +21,10 @@ router.post('/queue/next', auth, authorize('doctor'), ctrl.callNextPatient);
 // Update status
 router.put('/:id/status', auth, authorize('patient', 'doctor', 'receptionist', 'admin'), ctrl.updateAppointmentStatus);
 
+// Doctor: save consultation notes / diagnosis / prescription
+router.put('/:id/consultation', auth, authorize('doctor'), ctrl.saveConsultation);
+
+// Doctor: add lab test request
+router.post('/:id/lab-request', auth, authorize('doctor'), ctrl.addLabRequest);
+
 module.exports = router;

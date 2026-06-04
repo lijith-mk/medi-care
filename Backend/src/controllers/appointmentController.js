@@ -387,3 +387,66 @@ exports.updateAppointmentStatus = async (req, res, next) => {
     res.json({ success: true, message: 'Appointment updated', data: { appointment: populated } });
   } catch (err) { next(err); }
 };
+
+// ── Doctor: save consultation notes / diagnosis / prescription ───────────────
+exports.saveConsultation = async (req, res, next) => {
+  try {
+    const doctorId = req.user.id;
+    if (req.user.role !== 'doctor') {
+      return res.status(403).json({ success: false, message: 'Forbidden' });
+    }
+
+    const { id } = req.params;
+    const { notes, diagnosis, prescription } = req.body;
+
+    const appt = await Appointment.findById(id);
+    if (!appt) return res.status(404).json({ success: false, message: 'Appointment not found' });
+    if (appt.doctor.toString() !== doctorId) {
+      return res.status(403).json({ success: false, message: 'Forbidden' });
+    }
+
+    if (notes       !== undefined) appt.notes       = notes;
+    if (diagnosis   !== undefined) appt.diagnosis   = diagnosis;
+    if (prescription !== undefined) appt.prescription = prescription;
+
+    await appt.save();
+    const populated = await populate(Appointment.findById(id));
+    res.json({ success: true, message: 'Consultation saved.', data: { appointment: populated } });
+  } catch (err) { next(err); }
+};
+
+// ── Doctor: add a lab test request to an appointment ────────────────────────
+exports.addLabRequest = async (req, res, next) => {
+  try {
+    const doctorId = req.user.id;
+    if (req.user.role !== 'doctor') {
+      return res.status(403).json({ success: false, message: 'Forbidden' });
+    }
+
+    const { id } = req.params;
+    const { testType, notes } = req.body;
+
+    if (!testType || !String(testType).trim()) {
+      return res.status(400).json({ success: false, message: 'testType is required' });
+    }
+
+    const appt = await Appointment.findById(id);
+    if (!appt) return res.status(404).json({ success: false, message: 'Appointment not found' });
+    if (appt.doctor.toString() !== doctorId) {
+      return res.status(403).json({ success: false, message: 'Forbidden' });
+    }
+
+    appt.labRequests.push({
+      testType: String(testType).trim(),
+      notes:    notes ? String(notes).trim() : '',
+    });
+    await appt.save();
+
+    const populated = await populate(Appointment.findById(id));
+    res.status(201).json({
+      success: true,
+      message: `Lab request added: ${testType}`,
+      data: { appointment: populated },
+    });
+  } catch (err) { next(err); }
+};
