@@ -144,11 +144,20 @@ export default function DoctorDashboardPage() {
     });
     setLabReqForm({ testType: '', notes: '' });
     setConsultMsg(null);
-    // Load reports for this appointment
+    setApptReports([]);
+    // Load reports for this appointment using appointmentId — no patient ID needed
     try {
       const res = await getReportsByAppointment(appt._id);
       setApptReports(res?.data?.reports || []);
     } catch { setApptReports([]); }
+  };
+
+  const refreshReports = async () => {
+    if (!activeAppt) return;
+    try {
+      const res = await getReportsByAppointment(activeAppt._id);
+      setApptReports(res?.data?.reports || []);
+    } catch { }
   };
 
   const handleSaveConsultation = async () => {
@@ -178,6 +187,8 @@ export default function DoctorDashboardPage() {
         setLabReqForm({ testType: '', notes: '' });
       }
       setConsultMsg({ type: 'success', text: `Lab request added: ${labReqForm.testType}` });
+      // Refresh reports in case lab already uploaded for a previous request
+      await refreshReports();
     } catch (err) {
       setConsultMsg({ type: 'error', text: err?.response?.data?.message || 'Failed.' });
     } finally { setAddingLab(false); }
@@ -309,20 +320,31 @@ export default function DoctorDashboardPage() {
                     )}
                   </div>
                 </div>
-                <button
-                  onClick={handleNext}
-                  disabled={nextLoading}
-                  className="flex items-center gap-1.5 rounded-lg bg-purple-600 px-4 py-2 text-xs font-semibold text-white hover:bg-purple-700 disabled:opacity-50 transition"
-                >
-                  {nextLoading ? (
-                    <span className="h-3.5 w-3.5 rounded-full border-2 border-white border-t-transparent animate-spin" />
-                  ) : (
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => openConsultation(inProgress)}
+                    className="flex items-center gap-1.5 rounded-lg bg-white border border-purple-300 px-4 py-2 text-xs font-semibold text-purple-700 hover:bg-purple-50 transition"
+                  >
                     <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                     </svg>
-                  )}
-                  Next Patient
-                </button>
+                    Open Notes
+                  </button>
+                  <button
+                    onClick={handleNext}
+                    disabled={nextLoading}
+                    className="flex items-center gap-1.5 rounded-lg bg-purple-600 px-4 py-2 text-xs font-semibold text-white hover:bg-purple-700 disabled:opacity-50 transition"
+                  >
+                    {nextLoading ? (
+                      <span className="h-3.5 w-3.5 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                    ) : (
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                      </svg>
+                    )}
+                    Next Patient
+                  </button>
+                </div>
               </div>
             </div>
           )}
@@ -394,10 +416,15 @@ export default function DoctorDashboardPage() {
                           {a.tokenNumber}
                         </div>
                         <div className="min-w-0">
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 flex-wrap">
                             <p className="text-sm font-semibold text-gray-900">
                               {a.patient?.name || a.guestPatient?.name || '—'}
                             </p>
+                            {a.patient?.mrn && (
+                              <span className="rounded-full bg-green-100 border border-green-200 px-1.5 py-0.5 text-[10px] font-mono font-semibold text-green-700">
+                                {a.patient.mrn}
+                              </span>
+                            )}
                             {!a.patient && a.guestPatient?.name && (
                               <span className="rounded-full bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium text-blue-600">Walk-in</span>
                             )}
@@ -486,7 +513,14 @@ export default function DoctorDashboardPage() {
                 <p className="text-sm font-bold text-gray-900">
                   Token #{activeAppt.tokenNumber} — {activeAppt.patient?.name || activeAppt.guestPatient?.name || '—'}
                 </p>
-                <p className="text-xs text-gray-400">{activeAppt.patient?.email || (activeAppt.guestPatient?.phone ? `📞 ${activeAppt.guestPatient.phone}` : '')}</p>
+                {activeAppt.patient?.mrn && (
+                  <span className="inline-block mt-0.5 rounded-full bg-green-100 border border-green-300 px-2 py-0.5 text-[11px] font-mono font-semibold text-green-800">
+                    {activeAppt.patient.mrn}
+                  </span>
+                )}
+                <p className="text-xs text-gray-400 mt-0.5">
+                  {activeAppt.patient?.email || (activeAppt.guestPatient?.phone ? `📞 ${activeAppt.guestPatient.phone}` : '')}
+                </p>
               </div>
               <button onClick={() => setActiveAppt(null)} className="rounded-lg p-1.5 hover:bg-green-100 transition">
                 <svg className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
@@ -573,23 +607,35 @@ export default function DoctorDashboardPage() {
               </div>
 
               {/* Lab reports */}
-              {apptReports.length > 0 && (
-                <div className="space-y-2">
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
                   <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Lab Reports</h3>
-                  {apptReports.map((r) => (
+                  <button onClick={refreshReports}
+                    className="flex items-center gap-1 text-xs text-gray-400 hover:text-green-600 transition">
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    Refresh
+                  </button>
+                </div>
+                {apptReports.length === 0 ? (
+                  <p className="text-xs text-gray-400 italic py-2">No reports uploaded yet for this appointment.</p>
+                ) : (
+                  apptReports.map((r) => (
                     <div key={r._id} className="flex items-center justify-between rounded-lg border border-gray-100 bg-white px-3 py-2.5">
                       <div>
                         <p className="text-xs font-semibold text-gray-800">{r.testType}</p>
                         <p className="text-[11px] text-gray-400">by {r.uploadedBy?.name} · {new Date(r.createdAt).toLocaleDateString()}</p>
+                        {r.notes && <p className="text-[11px] text-gray-400 italic">"{r.notes}"</p>}
                       </div>
                       <a href={r.fileUrl} target="_blank" rel="noopener noreferrer"
                         className="rounded-lg border border-blue-200 px-2.5 py-1.5 text-xs font-medium text-blue-600 hover:bg-blue-50 transition">
                         View
                       </a>
                     </div>
-                  ))}
-                </div>
-              )}
+                  ))
+                )}
+              </div>
 
               {/* Complete button */}
               {activeAppt.status !== 'completed' && activeAppt.status !== 'cancelled' && (

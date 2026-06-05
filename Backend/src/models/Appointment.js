@@ -47,7 +47,7 @@ appointmentSchema.index(
     sparse: true,
     partialFilterExpression: {
       patient: { $exists: true, $ne: null },
-      status:  { $nin: ['cancelled'] },
+      status:  { $nin: ['cancelled', 'skipped'] },
     },
   }
 );

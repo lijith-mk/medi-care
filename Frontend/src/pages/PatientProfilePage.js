@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useAuth } from '../context/AuthContext';
 import { getPatientProfile, updatePatientProfile } from '../services/profileService';
 import { uploadDocument, deleteDocument } from '../services/uploadService';
 import { ProfileCard, Field, ViewRow, Divider, Alert, SaveBar, inputCls, selectCls, FieldError, fieldCls } from '../components/ProfileCard';
@@ -61,6 +62,7 @@ function EditBtn({ onClick }) {
 }
 
 export default function PatientProfilePage() {
+  const { user } = useAuth();
   const [data, setData] = useState(empty);
   const [draft, setDraft] = useState(empty);
   const [documents, setDocuments] = useState([]);
@@ -166,6 +168,27 @@ export default function PatientProfilePage() {
 
   return (
     <div className="space-y-4">
+      {/* ── MRN Card ── */}
+      {user?.mrn && (
+        <div className="flex items-center justify-between rounded-2xl border border-green-200 bg-green-50 px-5 py-4">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-green-600 text-white">
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V8a2 2 0 00-2-2h-5m-4 0V5a2 2 0 114 0v1m-4 0a2 2 0 104 0m-5 8a2 2 0 100-4 2 2 0 000 4zm0 0c1.306 0 2.417.835 2.83 2M9 14a3.001 3.001 0 00-2.83 2M15 11h3m-3 4h2" />
+              </svg>
+            </div>
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-green-600">Medical Record Number</p>
+              <p className="text-lg font-bold font-mono text-green-900 tracking-wide">{user.mrn}</p>
+            </div>
+          </div>
+          <div className="text-right">
+            <p className="text-xs text-green-600">Share this with your doctor</p>
+            <p className="text-xs text-green-500">or hospital reception</p>
+          </div>
+        </div>
+      )}
+
       <Alert type={msg?.type} text={msg?.text} />
 
       {/* ── 1. Personal Info ── */}

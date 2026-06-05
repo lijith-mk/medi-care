@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
+import { useAuth } from '../context/AuthContext';
 import { getAppointments, createAppointment, checkAvailability, getDoctors, updateAppointmentStatus } from '../services/appointmentService';
 import { getMyReports } from '../services/labService';
 
@@ -389,6 +390,7 @@ function BookingForm({ doctors, onBooked, onClose }) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function PatientAppointmentsPage() {
+  const { user } = useAuth();
   const [appointments, setAppointments] = useState([]);
   const [doctors,      setDoctors]      = useState([]);
   const [labReports,   setLabReports]   = useState([]);
@@ -440,6 +442,18 @@ export default function PatientAppointmentsPage() {
 
   return (
     <div className="space-y-4">
+      {/* MRN quick-reference strip */}
+      {user?.mrn && (
+        <div className="flex items-center gap-3 rounded-xl border border-green-200 bg-green-50 px-4 py-2.5">
+          <svg className="w-4 h-4 text-green-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V8a2 2 0 00-2-2h-5m-4 0V5a2 2 0 114 0v1m-4 0a2 2 0 104 0m-5 8a2 2 0 100-4 2 2 0 000 4zm0 0c1.306 0 2.417.835 2.83 2M9 14a3.001 3.001 0 00-2.83 2M15 11h3m-3 4h2" />
+          </svg>
+          <p className="text-xs text-green-700">
+            Your Medical Record Number: <span className="font-mono font-bold text-green-900 tracking-wider">{user.mrn}</span>
+          </p>
+        </div>
+      )}
+
       {/* Global banner */}
       {banner && (
         <div className={`flex items-center justify-between gap-3 rounded-xl border px-4 py-3 text-sm ${
@@ -573,6 +587,21 @@ export default function PatientAppointmentsPage() {
                       <p className="mt-1 text-xs text-gray-400 truncate">
                         Symptoms: {a.symptoms.join(', ')}
                       </p>
+                    )}
+                    {/* Show consultation result for completed appointments */}
+                    {a.status === 'completed' && (a.diagnosis || a.prescription) && (
+                      <div className="mt-2 rounded-lg border border-green-100 bg-green-50 px-3 py-2 space-y-1">
+                        {a.diagnosis && (
+                          <p className="text-xs text-gray-700">
+                            <span className="font-semibold text-green-700">Diagnosis:</span> {a.diagnosis}
+                          </p>
+                        )}
+                        {a.prescription && (
+                          <p className="text-xs text-gray-700">
+                            <span className="font-semibold text-green-700">Prescription:</span> {a.prescription}
+                          </p>
+                        )}
+                      </div>
                     )}
                   </div>
                   {/* Cancel button — only for pending/confirmed */}

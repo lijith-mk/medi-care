@@ -3,12 +3,19 @@ const { validationResult } = require('express-validator');
 const { OAuth2Client } = require('google-auth-library');
 const User = require('../models/User');
 const generateToken = require('../utils/generateToken');
+const generateMrn   = require('../utils/generateMrn');
 
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 function userPayload(user) {
-  return { id: user._id, name: user.name, email: user.email, role: user.role };
+  return {
+    id:   user._id,
+    name: user.name,
+    email: user.email,
+    role: user.role,
+    mrn:  user.mrn || null,
+  };
 }
 
 // ── Register (email/password) ─────────────────────────────────────────────────
@@ -31,8 +38,11 @@ exports.register = async (req, res, next) => {
     const salt = await bcrypt.genSalt(10);
     const hashed = await bcrypt.hash(password, salt);
 
+    // Generate MRN for patients (all self-registrations are patients)
+    const mrn = await generateMrn();
+
     // force role to 'patient' for self-registration
-    const user = await User.create({ name, email, password: hashed, role: 'patient', phone, age, gender, authProvider: 'local' });
+    const user = await User.create({ name, email, password: hashed, role: 'patient', phone, age, gender, authProvider: 'local', mrn });
     const token = generateToken(user);
 
     return res.status(201).json({
@@ -123,6 +133,7 @@ exports.googleAuth = async (req, res, next) => {
       }
     } else {
       // New user — create as patient
+      const mrn = await generateMrn();
       user = await User.create({
         name,
         email,
@@ -130,7 +141,7 @@ exports.googleAuth = async (req, res, next) => {
         role: 'patient',
         authProvider: 'google',
         avatarUrl: picture || null,
-        // no password for Google users
+        mrn,
       });
     }
 

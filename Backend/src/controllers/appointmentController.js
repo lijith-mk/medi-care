@@ -32,7 +32,7 @@ function toDateKey(dateOnly) {
 
 function populate(query) {
   return query
-    .populate('patient', 'name email phone')
+    .populate('patient', 'name email phone mrn')
     .populate('doctor',  'name email');
 }
 
@@ -194,12 +194,12 @@ exports.createAppointment = async (req, res, next) => {
         doctor,
         patient,
         appointmentDate: { $gte: start, $lte: end },
-        status: { $nin: ['cancelled'] },
+        status: { $nin: ['cancelled', 'skipped'] },
       });
       if (duplicate) {
         return res.status(409).json({
           success: false,
-          message: 'This patient already has an appointment with this doctor on this date',
+          message: `You already have an active appointment with this doctor on ${dateOnly.toLocaleDateString('en-US', { dateStyle: 'medium' })} (Token #${duplicate.tokenNumber}, status: ${duplicate.status}). Cancel it first to book again.`,
         });
       }
     }
