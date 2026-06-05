@@ -3,6 +3,13 @@ import api from './api';
 export const getAppointments = (params = {}) =>
   api.get('/appointments', { params }).then((r) => r.data);
 
+// Convenience wrappers for doctor dashboard
+export const getHistoryAppointments  = () =>
+  api.get('/appointments', { params: { range: 'history' } }).then((r) => r.data);
+
+export const getUpcomingAppointments = () =>
+  api.get('/appointments', { params: { range: 'upcoming' } }).then((r) => r.data);
+
 export const createAppointment = (payload) =>
   api.post('/appointments', payload).then((r) => r.data);
 
@@ -34,8 +41,9 @@ export const getDoctors = () =>
   api.get('/appointments/doctors').then((r) => r.data);
 
 export default {
-  getAppointments, createAppointment, updateAppointmentStatus,
-  saveConsultation, addLabRequest,
+  getAppointments, getHistoryAppointments, getUpcomingAppointments,
+  createAppointment, updateAppointmentStatus,
+  saveConsultation, addLabRequest, startConsultation,
   getTodayQueue, callNextPatient,
   checkAvailability, getDoctors,
 };

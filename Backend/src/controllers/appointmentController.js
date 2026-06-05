@@ -259,7 +259,10 @@ exports.getAppointments = async (req, res, next) => {
   try {
     const userId = req.user.id;
     const role   = req.user.role;
-    const { date } = req.query; // optional date filter
+    // ?date=YYYY-MM-DD  exact date
+    // ?range=history    appointmentDate < today
+    // ?range=upcoming   appointmentDate > today
+    const { date, range } = req.query;
 
     let filter = {};
     if (role === 'patient')     filter.patient = userId;
@@ -270,10 +273,16 @@ exports.getAppointments = async (req, res, next) => {
     if (date) {
       const { start, end } = dayRange(toDateOnly(date));
       filter.appointmentDate = { $gte: start, $lte: end };
+    } else if (range === 'history') {
+      const todayStart = toDateOnly(new Date());
+      filter.appointmentDate = { $lt: todayStart };
+    } else if (range === 'upcoming') {
+      const { end: todayEnd } = dayRange(toDateOnly(new Date()));
+      filter.appointmentDate = { $gt: todayEnd };
     }
 
     const appts = await populate(
-      Appointment.find(filter).sort({ appointmentDate: 1, tokenNumber: 1 })
+      Appointment.find(filter).sort({ appointmentDate: range === 'upcoming' ? 1 : -1, tokenNumber: 1 })
     );
 
     res.json({ success: true, data: { appointments: appts } });
